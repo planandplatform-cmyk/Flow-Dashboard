@@ -140,3 +140,44 @@ describe("formatting", () => {
     expect(formatDelta("ads_spend", 12.5)).toBe("+$12.50");
   });
 });
+
+describe("period totals from monthly exports", () => {
+  const r = new MetricResolver({
+    daily: [
+      { metric_key: "fb_views", date: "2026-08-01", value: 10 },
+      { metric_key: "fb_followers", date: "2026-08-01", value: 60 },
+    ],
+    period: [
+      { metric_key: "ga4_sessions", period_start: "2026-07-01", period_end: "2026-07-31", value: 310 },
+      { metric_key: "ga4_engaged_sessions", period_start: "2026-07-01", period_end: "2026-07-31", value: 155 },
+      { metric_key: "ga4_sessions", period_start: "2026-07-01", period_end: "2026-07-31", value: 100, dimension: "channel", dimension_value: "Direct" },
+      // A weekly upload overlapping the monthly one must not double count.
+      { metric_key: "ga4_sessions", period_start: "2026-07-01", period_end: "2026-07-07", value: 70 },
+      // Daily rows for August win over an August period total.
+      { metric_key: "fb_views", period_start: "2026-08-01", period_end: "2026-08-31", value: 999 },
+      { metric_key: "fb_followers", period_start: "2026-07-01", period_end: "2026-07-31", value: 55 },
+    ],
+  });
+  const july = { start: "2026-07-01", end: "2026-07-31" };
+
+  it("uses an exact period total", () => {
+    expect(r.resolve("ga4_sessions", july)).toEqual({ value: 310, estimated: false });
+    expect(r.resolve("ga4_engagement_rate", july).value).toBe(0.5);
+    expect(r.breakdown("ga4_sessions", "channel", july)).toEqual([{ bucket: "Direct", value: 100 }]);
+  });
+
+  it("prorates a partly covered period and flags it", () => {
+    const res = r.resolve("ga4_sessions", { start: "2026-07-16", end: "2026-08-15" });
+    expect(res.estimated).toBe(true);
+    expect(res.value).toBeCloseTo(160, 5); // 16 of 31 days of the monthly total
+  });
+
+  it("prefers daily rows over period totals for the same days", () => {
+    expect(r.resolve("fb_views", { start: "2026-08-01", end: "2026-08-31" }).value).toBe(10);
+  });
+
+  it("reads point-in-time metrics from the end of a period", () => {
+    expect(r.resolve("fb_followers", july).value).toBe(55);
+    expect(r.resolve("fb_followers", { start: "2026-07-01", end: "2026-08-31" }).value).toBe(60);
+  });
+});

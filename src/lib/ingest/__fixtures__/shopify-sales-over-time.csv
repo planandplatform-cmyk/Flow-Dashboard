@@ -1,0 +1,3 @@
+Day,Orders,Gross sales,Discounts,Returns,Net sales,Shipping charges,Taxes,Total sales
+2026-07-01,4,400.00,-20.00,0.00,380.00,15.00,31.35,426.35
+2026-07-02,2,180.00,0.00,-30.00,150.00,8.00,12.38,170.38

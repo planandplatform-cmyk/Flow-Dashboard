@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Client, Viewer } from "@/lib/data/portal";
+import { isFfm, type Client, type Viewer } from "@/lib/data/portal";
 
 export function PortalHeader({ client, viewer }: { client?: Client; viewer: Viewer }) {
   return (
@@ -32,6 +32,11 @@ export function PortalHeader({ client, viewer }: { client?: Client; viewer: View
         )}
 
         <nav className="ml-auto flex items-center gap-1 text-sm">
+          {client && isFfm(viewer.role) && (
+            <Link href={`/admin/c/${client.slug}/data`} className="hidden rounded-md px-3 py-2 text-fg-secondary transition hover:bg-raised hover:text-fg sm:block">
+              Manage data
+            </Link>
+          )}
           <Link href="/glossary" className="rounded-md px-3 py-2 text-fg-secondary transition hover:bg-raised hover:text-fg">
             Glossary
           </Link>

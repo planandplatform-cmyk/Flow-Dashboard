@@ -36,14 +36,17 @@ async function ClientList() {
         ) : (
           <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {clients.map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/c/${c.slug}`}
-                  className="block rounded-xl border border-line bg-surface p-5 transition hover:border-line-focus hover:bg-raised"
-                >
+              <li key={c.id} className="rounded-xl border border-line bg-surface transition hover:border-line-focus">
+                <Link href={`/c/${c.slug}`} className="block p-5 pb-3">
                   <p className="font-semibold">{c.name}</p>
                   <p className="mt-2 text-xs text-fg-muted">{c.enabled_sources.map((s) => SOURCE_LABELS[s]).join(" · ")}</p>
                 </Link>
+                {isFfm(viewer.role) && (
+                  <div className="flex gap-4 border-t border-line px-5 py-3 text-sm">
+                    <Link href={`/c/${c.slug}`} className="text-teal hover:text-teal-200">Report</Link>
+                    <Link href={`/admin/c/${c.slug}/data`} className="text-fg-secondary hover:text-fg">Manage data</Link>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

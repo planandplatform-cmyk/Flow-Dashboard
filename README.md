@@ -15,9 +15,12 @@ magic-link auth, row-level security), deployed on Vercel.
 | `src/lib/metrics/glossary.ts` | Key Terms glossary from the monthly report. |
 | `src/lib/data/portal.ts` | All data reads. Queries run as the signed-in user, so RLS decides what comes back. |
 | `src/app/c/[slug]` | Client report page, laid out like the monthly PDF. |
+| `src/app/admin/c/[slug]/data` | FFM-only data page: file upload with preview, manual entry, upload history with rollback. |
+| `src/lib/ingest` | File reading and one parser per platform export. See [docs/uploading-data.md](docs/uploading-data.md). |
 | `supabase/migrations` | Schema and row-level security. |
 | `supabase/seed.sql` | Demo client (Wieler Roofing). Generated, do not edit by hand. |
 | `supabase/tests/rls.test.sql` | Proves a client user cannot read another client's data. |
+| `supabase/tests/uploads.test.sql` | Proves upload commit and rollback restore data exactly. |
 | `scripts/seed/wieler-roofing.ts` | Source numbers for the demo client, with provenance for each value. |
 | `public/brand` | FFM logo and mark. |
 
@@ -36,7 +39,7 @@ only): no login, and it serves the seeded Wieler Roofing data from
 
 ```bash
 npm test            # metric math, report figures, copy rules
-npm run test:rls    # schema + RLS against a throwaway Postgres (needs Postgres binaries, no Docker)
+npm run test:rls    # schema, RLS, upload commit/rollback against a throwaway Postgres (needs Postgres binaries, no Docker)
 npm run typecheck
 npm run lint
 npm run build
@@ -55,8 +58,9 @@ npm run seed:generate
    file in `supabase/migrations` in filename order. Or, with the Supabase CLI:
    `supabase link --project-ref <ref>` then `supabase db push`.
 3. **Load the demo client.** Paste and run `supabase/seed.sql` in the SQL Editor.
-4. **Prove RLS works on the real database.** Paste and run `supabase/tests/rls.test.sql`.
-   It ends with `RLS tests passed` and rolls everything back.
+4. **Prove RLS works on the real database.** Paste and run `supabase/tests/rls.test.sql`,
+   then `supabase/tests/uploads.test.sql`. They end with `RLS tests passed` and
+   `Upload tests passed`, and roll everything back. (They expect the demo seed to be loaded.)
 5. **Auth settings** (*Authentication* section):
    - *Sign In / Providers*: keep Email enabled, turn **off** "Allow new users to sign up".
      Only people FFM invites can sign in.

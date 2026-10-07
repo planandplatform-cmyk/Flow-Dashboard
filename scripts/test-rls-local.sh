@@ -47,3 +47,6 @@ echo "Loading seed"
 
 echo "Running RLS test"
 "${PSQL[@]}" -t -f "$ROOT/supabase/tests/rls.test.sql"
+
+echo "Running upload commit/rollback test"
+"${PSQL[@]}" -t -f "$ROOT/supabase/tests/uploads.test.sql"

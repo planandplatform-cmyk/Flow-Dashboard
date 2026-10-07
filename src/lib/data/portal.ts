@@ -152,7 +152,7 @@ export async function getMetricData(clientId: string, range: DateRange): Promise
         ...(fixture.metricsDaily as DailyRow[]).filter((r) => inRange(r.date)),
         ...adRowsToDaily(fixture.adMetricsDaily.filter((r) => inRange(r.date))),
       ],
-      period: (fixture.metricsPeriod as PeriodRow[]).filter((r) => r.period_start >= range.start && r.period_end <= range.end),
+      period: (fixture.metricsPeriod as PeriodRow[]).filter((r) => r.period_start <= range.end && r.period_end >= range.start),
     };
   }
 
@@ -173,8 +173,9 @@ export async function getMetricData(clientId: string, range: DateRange): Promise
         .from("metrics_period")
         .select("metric_key, period_start, period_end, value, dimension, dimension_value")
         .eq("client_id", clientId)
-        .gte("period_start", range.start)
-        .lte("period_end", range.end)
+        // Any period overlapping the range; the resolver prorates partial ones.
+        .lte("period_start", range.end)
+        .gte("period_end", range.start)
         .order("id")
         .range(from, to),
     ),
@@ -201,14 +202,12 @@ export async function getLatestDataDate(clientId: string): Promise<string | null
     return fixture.metricsDaily.reduce<string | null>((max, r) => (max === null || r.date > max ? r.date : max), null);
   }
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("metrics_daily")
-    .select("date")
-    .eq("client_id", clientId)
-    .order("date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data?.date ?? null;
+  const [daily, period] = await Promise.all([
+    supabase.from("metrics_daily").select("date").eq("client_id", clientId).order("date", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("metrics_period").select("period_end").eq("client_id", clientId).order("period_end", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const dates = [daily.data?.date, period.data?.period_end].filter((d): d is string => Boolean(d)).sort();
+  return dates.at(-1) ?? null;
 }
 
 // ---------------------------------------------------------------------------

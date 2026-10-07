@@ -76,7 +76,7 @@ export class MetricResolver {
 
     switch (agg.type) {
       case "sum":
-        return this.sumDaily(key, range, filter);
+        return this.sumAdditive(key, range, filter);
 
       case "average": {
         const rows = this.dailyInRange(key, range, filter);
@@ -85,18 +85,23 @@ export class MetricResolver {
       }
 
       case "last": {
-        const rows = this.dailyInRange(key, range, filter);
-        if (rows.length === 0) return NULL_VALUE;
-        const latest = rows.reduce((a, b) => (b.date > a.date ? b : a));
+        // A period row (e.g. followers from a monthly export) counts as a
+        // reading taken on its last day. Daily readings win ties.
+        const points = [
+          ...this.dailyInRange(key, range, filter).map((r) => ({ date: r.date, value: r.value, daily: 1 })),
+          ...this.periodsFor(key, filter)
+            .filter((p) => p.period_end >= range.start && p.period_end <= range.end)
+            .map((p) => ({ date: p.period_end, value: p.value, daily: 0 })),
+        ];
+        if (points.length === 0) return NULL_VALUE;
+        const latest = points.reduce((a, b) => (b.date > a.date || (b.date === a.date && b.daily > a.daily) ? b : a));
         return { value: latest.value, estimated: false };
       }
 
       case "unique": {
-        const exact = (this.periodByKey.get(key) ?? []).find(
-          (r) => r.period_start === range.start && r.period_end === range.end && matchesDimension(r, filter),
-        );
+        const exact = this.periodsFor(key, filter).find((r) => r.period_start === range.start && r.period_end === range.end);
         if (exact) return { value: exact.value, estimated: false };
-        const fallback = this.sumDaily(key, range, filter);
+        const fallback = this.sumAdditive(key, range, filter);
         return fallback.value === null ? NULL_VALUE : { value: fallback.value, estimated: true };
       }
 
@@ -124,14 +129,15 @@ export class MetricResolver {
   /** Values for one dimension (e.g. sessions by channel), largest first. */
   breakdown(key: string, dimension: string, range: DateRange): { bucket: string; value: number }[] {
     const buckets = new Set<string>();
-    for (const r of this.dailyByKey.get(key) ?? []) {
-      if (r.dimension === dimension && r.date >= range.start && r.date <= range.end) buckets.add(r.dimension_value ?? "");
-    }
     const def = METRICS[key];
-    if (def?.aggregation.type === "ratio") {
-      for (const k of [def.aggregation.numerator, def.aggregation.denominator]) {
-        for (const r of this.dailyByKey.get(k) ?? []) {
-          if (r.dimension === dimension && r.date >= range.start && r.date <= range.end) buckets.add(r.dimension_value ?? "");
+    const keys = def?.aggregation.type === "ratio" ? [key, def.aggregation.numerator, def.aggregation.denominator] : [key];
+    for (const k of keys) {
+      for (const r of this.dailyByKey.get(k) ?? []) {
+        if (r.dimension === dimension && r.date >= range.start && r.date <= range.end) buckets.add(r.dimension_value ?? "");
+      }
+      for (const r of this.periodByKey.get(k) ?? []) {
+        if (r.dimension === dimension && r.period_start <= range.end && r.period_end >= range.start) {
+          buckets.add(r.dimension_value ?? "");
         }
       }
     }
@@ -152,11 +158,50 @@ export class MetricResolver {
     );
   }
 
-  private sumDaily(key: string, range: DateRange, filter?: DimensionFilter): ResolvedValue {
-    const rows = this.dailyInRange(key, range, filter);
-    if (rows.length === 0) return NULL_VALUE;
-    return { value: rows.reduce((s, r) => s + r.value, 0), estimated: false };
+  private periodsFor(key: string, filter?: DimensionFilter): PeriodRow[] {
+    return (this.periodByKey.get(key) ?? []).filter((r) => matchesDimension(r, filter));
   }
+
+  /**
+   * Sum of an additive metric. Daily rows are used where they exist. Period
+   * totals (from monthly exports with no daily breakdown) fill in where there
+   * are no daily rows; a period that only partly overlaps the range is
+   * prorated by day and flagged as an estimate.
+   */
+  private sumAdditive(key: string, range: DateRange, filter?: DimensionFilter): ResolvedValue {
+    const allDaily = (this.dailyByKey.get(key) ?? []).filter((r) => matchesDimension(r, filter));
+    const inRange = allDaily.filter((r) => r.date >= range.start && r.date <= range.end);
+    let total: number | null = inRange.length ? inRange.reduce((s, r) => s + r.value, 0) : null;
+    let estimated = false;
+
+    // Overlapping periods would double count. Prefer an exact match, then
+    // periods fully inside the range, then longer periods.
+    const candidates = this.periodsFor(key, filter)
+      .filter((p) => p.period_start <= range.end && p.period_end >= range.start)
+      .sort((a, b) => periodRank(b, range) - periodRank(a, range));
+    const accepted: PeriodRow[] = [];
+    for (const p of candidates) {
+      if (accepted.some((a) => a.period_start <= p.period_end && a.period_end >= p.period_start)) continue;
+      if (allDaily.some((r) => r.date >= p.period_start && r.date <= p.period_end)) continue;
+      accepted.push(p);
+      const start = p.period_start > range.start ? p.period_start : range.start;
+      const end = p.period_end < range.end ? p.period_end : range.end;
+      const share = dayCount(start, end) / dayCount(p.period_start, p.period_end);
+      if (share < 1) estimated = true;
+      total = (total ?? 0) + p.value * share;
+    }
+    return total === null ? NULL_VALUE : { value: total, estimated };
+  }
+}
+
+function dayCount(start: ISODate, end: ISODate): number {
+  return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
+function periodRank(p: PeriodRow, range: DateRange): number {
+  if (p.period_start === range.start && p.period_end === range.end) return 1e9;
+  const inside = p.period_start >= range.start && p.period_end <= range.end;
+  return (inside ? 1e6 : 0) + dayCount(p.period_start, p.period_end);
 }
 
 function push<T>(map: Map<string, T[]>, key: string, value: T) {

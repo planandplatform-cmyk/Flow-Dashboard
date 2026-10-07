@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
+  experimental: {
+    // Platform exports can be a few MB. Parsers cap files at 4 MB; leave room
+    // for multipart overhead. (Vercel's own request limit is 4.5 MB.)
+    serverActions: { bodySizeLimit: "4.4mb" },
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {
