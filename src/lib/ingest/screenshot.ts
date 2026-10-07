@@ -13,13 +13,13 @@ import { BatchBuilder } from "./batch";
 import { num, parseDate } from "./cells";
 import type { BreakdownType, ParseResult, Period } from "./types";
 
-export const SCREENSHOT_PLATFORMS = ["meta_facebook", "meta_instagram", "meta_ads", "linkedin"] as const;
+export const SCREENSHOT_PLATFORMS = ["ga4", "meta_facebook", "meta_instagram", "meta_ads", "linkedin"] as const;
 export type ScreenshotPlatform = (typeof SCREENSHOT_PLATFORMS)[number];
 
 export const MAX_SCREENSHOTS = 5;
-export const MAX_SCREENSHOT_BYTES = 3_500_000; // per image, after browser downscaling
+export const MAX_SCREENSHOT_BYTES = 3_500_000; // per file (images after browser downscaling)
 export const MAX_SCREENSHOTS_TOTAL_BYTES = 4_000_000; // request body limit with headroom
-export const SCREENSHOT_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+export const SCREENSHOT_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"] as const;
 
 /**
  * Metrics Claude may report per platform, with the labels each platform
@@ -27,6 +27,13 @@ export const SCREENSHOT_TYPES = ["image/png", "image/jpeg", "image/webp", "image
  * come back as components and are added up here (never by the model).
  */
 const LABELS: Record<ScreenshotPlatform, Record<string, string[]>> = {
+  ga4: {
+    ga4_sessions: ["Sessions"],
+    ga4_engaged_sessions: ["Engaged sessions"],
+    ga4_key_events: ["Key events", "Conversions (older reports)"],
+    ga4_users: ["Total users", "Users", "Active users (only if total users is not shown)"],
+    ga4_page_views: ["Views", "Page views", "Screen page views"],
+  },
   meta_facebook: {
     fb_views: ["Views", "Impressions (older screens)"],
     fb_reach: ["Reach", "Viewers", "Accounts reached"],
@@ -99,8 +106,8 @@ export function metricGuide(platform: ScreenshotPlatform): string {
 export function extractionSchema(platform: ScreenshotPlatform) {
   const keys = metricKeysFor(platform) as [string, ...string[]];
   return z.object({
-    is_analytics_screenshot: z.boolean().describe("False if no image is an analytics screen for this platform."),
-    platform_seen: z.enum(["facebook", "instagram", "meta_ads", "linkedin", "other", "unclear"]),
+    is_analytics_screenshot: z.boolean().describe("False if no screenshot or PDF page is an analytics report for this platform."),
+    platform_seen: z.enum(["google_analytics", "facebook", "instagram", "meta_ads", "linkedin", "other", "unclear"]),
     date_range: z
       .object({
         start: z.string().describe("YYYY-MM-DD"),
@@ -115,7 +122,7 @@ export function extractionSchema(platform: ScreenshotPlatform) {
         value: z.number().describe("The number shown, fully written out (21.2K becomes 21200)."),
         value_text: z.string().describe("The number exactly as printed on screen, e.g. '21,239' or '21.2K' or '$719.19'"),
         label_seen: z.string().describe("The label printed next to the number"),
-        image_index: z.number().describe("1-based position of the screenshot it came from"),
+        image_index: z.number().describe("1-based position of the screenshot or PDF it came from"),
         confidence: z.enum(["high", "medium", "low"]),
       }),
     ),
@@ -181,11 +188,11 @@ export function buildScreenshotResult(data: ReviewedScreenshotData): ParseResult
   const { platform, period } = data;
 
   if (!SCREENSHOT_PLATFORMS.includes(platform)) {
-    b.error("Choose Facebook, Instagram, Meta Ads or LinkedIn.");
+    b.error("Choose Google Analytics, Facebook, Instagram, Meta Ads or LinkedIn.");
     return b.finalize(parser);
   }
   if (!ISO.test(period.start) || !ISO.test(period.end) || period.end < period.start) {
-    b.error("Enter the date range the screenshots cover (start and end date).");
+    b.error("Enter the date range the numbers cover (start and end date).");
     return b.finalize(parser);
   }
 
@@ -293,11 +300,11 @@ export function reviewExtraction(
   const errors: string[] = [];
 
   if (!extraction.is_analytics_screenshot) {
-    errors.push("These do not look like analytics screenshots for the chosen platform.");
+    errors.push("These do not look like analytics reports for the chosen platform.");
   }
-  const expected = { meta_facebook: "facebook", meta_instagram: "instagram", meta_ads: "meta_ads", linkedin: "linkedin" }[platform];
+  const expected = { ga4: "google_analytics", meta_facebook: "facebook", meta_instagram: "instagram", meta_ads: "meta_ads", linkedin: "linkedin" }[platform];
   if (extraction.platform_seen !== expected && extraction.platform_seen !== "unclear") {
-    warnings.push(`The screenshots look like ${extraction.platform_seen.replace("_", " ")}, not the platform you chose. Check before saving.`);
+    warnings.push(`These look like ${extraction.platform_seen.replace("_", " ")}, not the platform you chose. Check before saving.`);
   }
 
   let period: Period | null = null;
@@ -307,16 +314,16 @@ export function reviewExtraction(
   if (seenStart && seenEnd && seenEnd >= seenStart) {
     period = { start: seenStart, end: seenEnd };
     if (entered && (entered.start !== seenStart || entered.end !== seenEnd)) {
-      warnings.push(`The screenshots show "${seen!.label}"; that range was used instead of the dates you entered.`);
+      warnings.push(`The files show "${seen!.label}"; that range was used instead of the dates you entered.`);
     }
   } else if (entered) {
     period = entered;
-    if (seen?.label) warnings.push(`The screenshots show "${seen.label}" without exact dates; using the dates you entered.`);
+    if (seen?.label) warnings.push(`The files show "${seen.label}" without exact dates; using the dates you entered.`);
   } else {
     errors.push(
       seen?.label
-        ? `The screenshots show "${seen.label}" but not exact dates. Enter the start and end date and read them again, or set the dates below.`
-        : "No dates are visible in the screenshots. Enter the start and end date below.",
+        ? `The files show "${seen.label}" but not exact dates. Enter the start and end date and read them again, or set the dates below.`
+        : "No dates are visible in the files. Enter the start and end date below.",
     );
   }
 
@@ -343,7 +350,7 @@ export function reviewExtraction(
   });
 
   const low = items.filter((i) => i.confidence === "low").map((i) => i.label);
-  if (low.length) warnings.push(`Low confidence readings: ${low.join(", ")}. Check them against the screenshot.`);
+  if (low.length) warnings.push(`Low confidence readings: ${low.join(", ")}. Check them against the original.`);
   if (items.some((i) => /rounded/.test(i.note ?? ""))) warnings.push("Some numbers are rounded on screen (K or M). Replace them with exact figures where you can.");
   for (const n of extraction.notes) warnings.push(n);
 

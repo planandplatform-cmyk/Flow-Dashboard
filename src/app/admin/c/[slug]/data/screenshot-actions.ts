@@ -52,17 +52,24 @@ function readPlatform(value: FormDataEntryValue | null): ScreenshotPlatform | nu
 
 async function readImages(form: FormData): Promise<{ images: ScreenshotImage[]; files: File[] } | { error: string }> {
   const files = form.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
-  if (!files.length) return { error: "Add at least one screenshot." };
-  if (files.length > MAX_SCREENSHOTS) return { error: `Upload up to ${MAX_SCREENSHOTS} screenshots at a time.` };
+  if (!files.length) return { error: "Add at least one screenshot or PDF." };
+  if (files.length > MAX_SCREENSHOTS) return { error: `Upload up to ${MAX_SCREENSHOTS} files at a time.` };
   let total = 0;
   const images: ScreenshotImage[] = [];
   for (const f of files) {
-    if (!(SCREENSHOT_TYPES as readonly string[]).includes(f.type)) return { error: `${f.name} is not a PNG, JPEG, WebP or GIF image.` };
-    if (f.size > MAX_SCREENSHOT_BYTES) return { error: `${f.name} is too large. Crop it to the analytics area and try again.` };
+    if (!(SCREENSHOT_TYPES as readonly string[]).includes(f.type)) return { error: `${f.name} is not a PDF or a PNG, JPEG, WebP or GIF image.` };
+    if (f.size > MAX_SCREENSHOT_BYTES) {
+      return {
+        error:
+          f.type === "application/pdf"
+            ? `${f.name} is too large (over 3.5 MB). Save only the pages with the numbers, or export a smaller PDF.`
+            : `${f.name} is too large. Crop it to the analytics area and try again.`,
+      };
+    }
     total += f.size;
     images.push({ data: Buffer.from(await f.arrayBuffer()).toString("base64"), mediaType: f.type as ScreenshotImage["mediaType"] });
   }
-  if (total > MAX_SCREENSHOTS_TOTAL_BYTES) return { error: "These screenshots are too large together. Upload fewer at a time." };
+  if (total > MAX_SCREENSHOTS_TOTAL_BYTES) return { error: "These files are too large together (4 MB limit). Upload fewer at a time." };
   return { images, files };
 }
 
@@ -77,10 +84,10 @@ export async function readScreenshotUpload(slug: string, _prev: ScreenshotReadSt
   const auth = await authorizeStaffForClient(slug);
   if ("error" in auth) return { status: "error", message: auth.error };
   if (!screenshotReadingConfigured()) {
-    return { status: "error", message: "Reading screenshots needs an Anthropic API key. Add ANTHROPIC_API_KEY to the environment variables." };
+    return { status: "error", message: "Reading screenshots and PDFs needs an Anthropic API key. Add ANTHROPIC_API_KEY to the environment variables." };
   }
   const platform = readPlatform(form.get("platform"));
-  if (!platform) return { status: "error", message: "Choose which platform the screenshots are from." };
+  if (!platform) return { status: "error", message: "Choose which platform the files are from." };
   if (!auth.client.enabled_sources.includes(platform)) {
     return { status: "error", message: `${auth.client.name} does not have this channel turned on. Turn it on in the client's Settings first.` };
   }
@@ -93,7 +100,7 @@ export async function readScreenshotUpload(slug: string, _prev: ScreenshotReadSt
   try {
     extraction = await readScreenshots(imgs.images, platform, new Date().toISOString().slice(0, 10));
   } catch (e) {
-    return { status: "error", message: e instanceof ScreenshotReadError ? e.message : "Something went wrong reading the screenshots." };
+    return { status: "error", message: e instanceof ScreenshotReadError ? e.message : "Something went wrong reading the files." };
   }
 
   const review = reviewExtraction(extraction, platform, entered);
@@ -111,7 +118,7 @@ export async function readScreenshotUpload(slug: string, _prev: ScreenshotReadSt
     review.warnings.push(...result.warnings.filter((w) => !review.warnings.includes(w)));
     if (result.ok) overlap = await overlapFor(auth.client.id, result.batch);
   }
-  if (!review.items.length && !review.breakdowns.length) errors.push("No numbers could be read from these screenshots.");
+  if (!review.items.length && !review.breakdowns.length) errors.push("No numbers could be read from these files.");
 
   return { status: "ready", platform, ...review, errors, overlap, demo: isDemoMode() };
 }
@@ -144,7 +151,7 @@ export async function saveScreenshotUpload(
   const auth = await authorizeStaffForClient(slug);
   if ("error" in auth) return { status: "error", message: auth.error };
   const reviewed = parseReviewed(String(form.get("reviewed") ?? ""));
-  if (!reviewed) return { status: "error", message: "The reviewed values could not be read. Read the screenshots again." };
+  if (!reviewed) return { status: "error", message: "The reviewed values could not be read. Read the files again." };
   if (!auth.client.enabled_sources.includes(reviewed.platform)) {
     return { status: "error", message: `${auth.client.name} does not have this channel turned on.` };
   }
@@ -153,7 +160,7 @@ export async function saveScreenshotUpload(
   const imgs = await readImages(form);
   if ("error" in imgs) return { status: "error", message: imgs.error };
 
-  // Keep the screenshots with the upload, as evidence for every value.
+  // Keep the files with the upload, as evidence for every value.
   const supabase = await createClient();
   const uploadId = crypto.randomUUID();
   const folder = `${auth.client.id}/${uploadId}`;
@@ -163,7 +170,7 @@ export async function saveScreenshotUpload(
     const { error } = await supabase.storage.from("uploads").upload(path, f, { contentType: f.type, upsert: false });
     if (error) {
       if (stored.length) await supabase.storage.from("uploads").remove(stored);
-      return { status: "error", message: `Could not store the screenshots: ${error.message}` };
+      return { status: "error", message: `Could not store the files: ${error.message}` };
     }
     stored.push(path);
   }

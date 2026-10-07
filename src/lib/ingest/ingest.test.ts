@@ -211,7 +211,8 @@ describe("LinkedIn", () => {
 describe("guard rails", () => {
   it("rejects unknown files and wrong extensions", () => {
     expect(parseUpload(new TextEncoder().encode("a,b\n1,2\n"), ctx("x.csv")).errors[0]).toMatch(/could not recognize/);
-    expect(parseUpload(new TextEncoder().encode("hello"), ctx("x.pdf")).errors[0]).toMatch(/CSV or Excel/);
+    expect(parseUpload(new TextEncoder().encode("hello"), ctx("x.pdf")).errors[0]).toMatch(/Screenshots & PDFs tab/);
+    expect(parseUpload(new TextEncoder().encode("hello"), ctx("x.docx")).errors[0]).toMatch(/CSV or Excel/);
   });
 
   it("reads the right parser even when the wrong platform was picked", () => {

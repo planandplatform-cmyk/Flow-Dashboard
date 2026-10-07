@@ -5,11 +5,12 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { Button, Field, Notice, inputClass } from "@/components/form";
 import { formatValue } from "@/lib/metrics/format";
 import { METRICS } from "@/lib/metrics/config";
-import { MAX_SCREENSHOTS, type ScreenshotPlatform } from "@/lib/ingest/screenshot";
+import { MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type ScreenshotPlatform } from "@/lib/ingest/screenshot";
 import type { BreakdownType } from "@/lib/ingest/types";
 import { readScreenshotUpload, saveScreenshotUpload, type ScreenshotReadState } from "./screenshot-actions";
 
 const PLATFORMS: { value: ScreenshotPlatform; label: string }[] = [
+  { value: "ga4", label: "Google Analytics" },
   { value: "meta_facebook", label: "Facebook" },
   { value: "meta_instagram", label: "Instagram" },
   { value: "meta_ads", label: "Meta Ads" },
@@ -41,8 +42,14 @@ interface Shot {
   url: string;
 }
 
-/** Downscale large screenshots in the browser so uploads stay small and fast. */
+const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+
+/**
+ * Downscale large screenshots in the browser so uploads stay small and fast.
+ * PDFs are sent as they are: the model reads their text and pages directly.
+ */
 async function prepare(file: File): Promise<File> {
+  if (isPdf(file)) return file.type === "application/pdf" ? file : new File([file], file.name, { type: "application/pdf" });
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
   const okType = ["image/png", "image/jpeg", "image/webp"].includes(file.type);
@@ -113,15 +120,18 @@ export function ScreenshotPanel({
 
   async function addFiles(files: File[]) {
     setPrepError(null);
-    const images = files.filter((f) => f.type.startsWith("image/"));
-    if (images.length < files.length) setPrepError("Only images can be added here. Use the Upload a file tab for CSV and Excel exports.");
+    const usable = files.filter((f) => f.type.startsWith("image/") || isPdf(f));
+    if (usable.length < files.length) setPrepError("Only screenshots and PDFs can be added here. Use the Upload a file tab for CSV and Excel exports.");
+    const tooBig = usable.filter((f) => isPdf(f) && f.size > MAX_SCREENSHOT_BYTES);
+    if (tooBig.length) setPrepError(`${tooBig[0].name} is over 3.5 MB. Save only the pages with the numbers, or export a smaller PDF.`);
+    const accepted = usable.filter((f) => !tooBig.includes(f));
     const room = MAX_SCREENSHOTS - shots.length;
-    if (images.length > room) setPrepError(`Up to ${MAX_SCREENSHOTS} screenshots at a time.`);
+    if (accepted.length > room) setPrepError(`Up to ${MAX_SCREENSHOTS} files at a time.`);
     try {
-      const prepared = await Promise.all(images.slice(0, Math.max(0, room)).map(prepare));
+      const prepared = await Promise.all(accepted.slice(0, Math.max(0, room)).map(prepare));
       setShots((s) => [...s, ...prepared.map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }))]);
     } catch {
-      setPrepError("One of the images could not be opened.");
+      setPrepError("One of the files could not be opened.");
     }
   }
 
@@ -161,12 +171,12 @@ export function ScreenshotPanel({
   }
 
   if (!platforms.length) {
-    return <Notice tone="info">{clientName} has no Facebook, Instagram, Meta Ads or LinkedIn channel turned on. Turn one on in Settings to read screenshots.</Notice>;
+    return <Notice tone="info">{clientName} has no Google Analytics, Facebook, Instagram, Meta Ads or LinkedIn channel turned on. Turn one on in Settings to read screenshots and PDFs.</Notice>;
   }
 
   if (!configured) {
     return (
-      <Notice tone="info" title="Screenshot reading is not set up yet">
+      <Notice tone="info" title="Screenshot and PDF reading is not set up yet">
         Add an Anthropic API key as <code>ANTHROPIC_API_KEY</code> in the Vercel environment variables (and in <code>.env.local</code> for local
         development), then reload this page.
       </Notice>
@@ -186,7 +196,7 @@ export function ScreenshotPanel({
           </select>
         </Field>
 
-        <Field label={`Screenshots (${shots.length}/${MAX_SCREENSHOTS})`} htmlFor="shot-files" hint="Drop images here, choose them, or paste with Ctrl+V / Cmd+V.">
+        <Field label={`Screenshots or PDFs (${shots.length}/${MAX_SCREENSHOTS})`} htmlFor="shot-files" hint="Drop files here, choose them, or paste screenshots with Ctrl+V / Cmd+V.">
           <label
             htmlFor="shot-files"
             onDragOver={(e) => e.preventDefault()}
@@ -196,14 +206,14 @@ export function ScreenshotPanel({
             }}
             className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-line bg-raised px-4 py-6 text-center transition hover:border-teal"
           >
-            <span className="text-sm font-medium text-fg">Add screenshots</span>
-            <span className="mt-1 text-xs text-fg-muted">PNG, JPEG or WebP</span>
+            <span className="text-sm font-medium text-fg">Add screenshots or PDFs</span>
+            <span className="mt-1 text-xs text-fg-muted">PNG, JPEG, WebP or PDF</span>
           </label>
           <input
             id="shot-files"
             type="file"
             multiple
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.pdf"
             className="sr-only"
             onChange={(e) => {
               void addFiles([...(e.target.files ?? [])]);
@@ -216,13 +226,20 @@ export function ScreenshotPanel({
           <ul className="grid grid-cols-3 gap-2">
             {shots.map((s, i) => (
               <li key={s.id} className="group relative overflow-hidden rounded-md border border-line bg-raised">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.url} alt={`Screenshot ${i + 1}`} className="h-20 w-full object-cover object-top" />
+                {isPdf(s.file) ? (
+                  <div className="flex h-20 flex-col items-center justify-center gap-1 px-1 text-center">
+                    <span className="rounded border border-teal-800 bg-teal-950 px-1.5 text-xs font-semibold text-teal">PDF</span>
+                    <span className="w-full truncate text-xs text-fg-muted" title={s.file.name}>{s.file.name}</span>
+                  </div>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={s.url} alt={`Screenshot ${i + 1}`} className="h-20 w-full object-cover object-top" />
+                )}
                 <span className="absolute left-1 top-1 rounded bg-page/80 px-1.5 text-xs text-fg">{i + 1}</span>
                 <button
                   type="button"
                   onClick={() => removeShot(s.id)}
-                  aria-label={`Remove screenshot ${i + 1}`}
+                  aria-label={`Remove file ${i + 1}`}
                   className="absolute right-1 top-1 rounded bg-page/80 px-1.5 text-xs text-fg-secondary hover:text-negative"
                 >
                   ×
@@ -235,7 +252,7 @@ export function ScreenshotPanel({
 
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium uppercase tracking-wider text-fg-secondary">Dates covered</legend>
-          <p className="text-xs text-fg-muted">Only needed if the screenshots show something like &quot;Last 28 days&quot; instead of exact dates.</p>
+          <p className="text-xs text-fg-muted">Only needed if the files show something like &quot;Last 28 days&quot; instead of exact dates.</p>
           <div className="grid grid-cols-2 gap-3">
             <input aria-label="Start date" type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className={inputClass} />
             <input aria-label="End date" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className={inputClass} />
@@ -243,7 +260,7 @@ export function ScreenshotPanel({
         </fieldset>
 
         <Button type="button" onClick={read} disabled={reading || saving || shots.length === 0} className="w-full">
-          {reading ? "Reading screenshots..." : "Read screenshots"}
+          {reading ? "Reading..." : "Read numbers"}
         </Button>
         <p className="text-xs text-fg-muted">AI reads the numbers; you check every value before anything is saved.</p>
       </div>
@@ -251,16 +268,17 @@ export function ScreenshotPanel({
       <div className="min-w-0 space-y-6" aria-live="polite">
         {state.status === "idle" && !reading && (
           <div className="rounded-xl border border-dashed border-line p-8 text-sm leading-relaxed text-fg-secondary">
-            <p className="font-medium text-fg">Tips for screenshots that read well</p>
+            <p className="font-medium text-fg">Tips for files that read well</p>
             <ul className="mt-3 list-disc space-y-1.5 pl-5">
               <li>Set the date range in the platform first, and keep the dates visible in the screenshot.</li>
               <li>Hover off charts so tooltips do not cover numbers.</li>
               <li>Exact numbers beat rounded ones (21,239 rather than 21.2K). Open the detail view when the platform rounds.</li>
-              <li>One platform per batch. Up to {MAX_SCREENSHOTS} screenshots at a time.</li>
+              <li>PDFs work too: a GA4 or Meta report export, or a platform page saved as PDF. Keep them under 3.5 MB.</li>
+              <li>One platform per batch. Up to {MAX_SCREENSHOTS} files at a time.</li>
             </ul>
           </div>
         )}
-        {reading && <Notice tone="info">Reading {shots.length} screenshot{shots.length === 1 ? "" : "s"}. This usually takes 15 to 60 seconds.</Notice>}
+        {reading && <Notice tone="info">Reading {shots.length} file{shots.length === 1 ? "" : "s"}. This usually takes 15 to 60 seconds.</Notice>}
         {state.status === "error" && !reading && <Notice tone="error">{state.message}</Notice>}
         {saved && (
           <Notice tone="success" title="Saved">
@@ -372,11 +390,11 @@ function Review({
         <div className="overflow-x-auto rounded-xl border border-line">
           <table className="w-full min-w-[640px] text-sm">
             <caption className="bg-raised px-4 pt-3 text-left text-xs font-medium uppercase tracking-wider text-fg-secondary">
-              Numbers read. Correct anything that does not match the screenshot; untick to leave a number out.
+              Numbers read. Correct anything that does not match the original; untick to leave a number out.
             </caption>
             <thead className="bg-raised">
               <tr>
-                {["", "Metric", "Value to save", "On screen", "Confidence", "Shot"].map((h, i) => (
+                {["", "Metric", "Value to save", "As shown", "Confidence", "File"].map((h, i) => (
                   <th key={i} scope="col" className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-fg-secondary">
                     {h}
                   </th>
@@ -436,7 +454,7 @@ function Review({
             </caption>
             <thead className="bg-raised">
               <tr>
-                {["", "Breakdown", "Label", "Percent", "Shot"].map((h, i) => (
+                {["", "Breakdown", "Label", "Percent", "File"].map((h, i) => (
                   <th key={i} scope="col" className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-fg-secondary">
                     {h}
                   </th>
@@ -488,13 +506,21 @@ function Review({
       {zoom !== null && shots[zoom - 1] && (
         <figure className="rounded-xl border border-line bg-surface p-3">
           <figcaption className="mb-2 flex items-center justify-between text-xs text-fg-secondary">
-            Screenshot {zoom}
+            {isPdf(shots[zoom - 1].file) ? shots[zoom - 1].file.name : `Screenshot ${zoom}`}
             <button type="button" onClick={() => setZoom(null)} className="text-fg-secondary hover:text-fg">
               Close
             </button>
           </figcaption>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={shots[zoom - 1].url} alt={`Screenshot ${zoom}`} className="w-full rounded-md" />
+          {isPdf(shots[zoom - 1].file) ? (
+            <object data={shots[zoom - 1].url} type="application/pdf" className="h-[70vh] w-full rounded-md">
+              <a href={shots[zoom - 1].url} target="_blank" rel="noreferrer" className="text-teal underline">
+                Open the PDF
+              </a>
+            </object>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={shots[zoom - 1].url} alt={`Screenshot ${zoom}`} className="w-full rounded-md" />
+          )}
         </figure>
       )}
 

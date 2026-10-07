@@ -16,7 +16,7 @@ magic-link auth, row-level security), deployed on Vercel.
 | `src/lib/data/portal.ts` | All data reads. Queries run as the signed-in user, so RLS decides what comes back. |
 | `src/app/c/[slug]` | Client report page, laid out like the monthly PDF. |
 | `src/app/admin/c/[slug]/data` | FFM-only data page: file upload with preview, manual entry, upload history with rollback. |
-| `src/lib/ingest` | File reading and one parser per platform export, plus AI screenshot reading (`screenshot.ts`, `screenshot-reader.ts`). See [docs/uploading-data.md](docs/uploading-data.md). |
+| `src/lib/ingest` | File reading and one parser per platform export, plus AI reading of screenshots and PDFs (`screenshot.ts`, `screenshot-reader.ts`). See [docs/uploading-data.md](docs/uploading-data.md). |
 | `supabase/migrations` | Schema and row-level security. |
 | `supabase/seed.sql` | Demo client (Wieler Roofing). Generated, do not edit by hand. |
 | `supabase/tests/rls.test.sql` | Proves a client user cannot read another client's data. |
@@ -79,7 +79,7 @@ npm run seed:generate
      built-in sender is heavily rate-limited and not meant for production.
 6. **Environment variables** (Vercel project settings, and `.env.local` for local dev).
    Copy `.env.example`. Supabase values come from *Project Settings → API Keys*;
-   `ANTHROPIC_API_KEY` (for reading screenshots) from https://platform.claude.com.
+   `ANTHROPIC_API_KEY` (for reading screenshots and PDFs) from https://platform.claude.com.
 7. **Make yourself an admin.** Invite yourself from *Authentication → Users → Invite user*,
    sign in once, then run in the SQL Editor:
 
@@ -105,7 +105,7 @@ in the Supabase SQL Editor.
 2. On the next screen, **invite** the people from that business. Each gets an email, signs in
    with their own address, and only ever sees that client. One person can be given access to
    several clients (an owner with two businesses sees a list to choose from).
-3. **Manage data** to upload exports or screenshots. Only the client's channels are accepted.
+3. **Manage data** to upload exports, screenshots or PDFs. Only the client's channels are accepted.
 
 Channels can be changed later in **Settings**. Turning one off hides it from the report and keeps
 its data. **Archive** hides a client from lists and blocks its logins (enforced in the database);

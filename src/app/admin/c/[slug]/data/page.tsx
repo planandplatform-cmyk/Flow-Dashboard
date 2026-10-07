@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Manage data" };
 
 const TABS = [
   { id: "upload", label: "Upload a file" },
-  { id: "screenshots", label: "Screenshots" },
+  { id: "screenshots", label: "Screenshots & PDFs" },
   { id: "manual", label: "Enter manually" },
   { id: "history", label: "Upload history" },
 ] as const;

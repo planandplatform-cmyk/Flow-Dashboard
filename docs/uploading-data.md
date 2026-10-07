@@ -70,19 +70,24 @@ Page admin view > **Analytics** > Content, Followers or Visitors > **Export**. E
 Excel file with several sheets; upload it as is. LinkedIn exports don't include the running
 follower total, so enter it with **Enter manually** each month.
 
-## Screenshots (Facebook, Instagram, Meta Ads, LinkedIn)
+## Screenshots and PDFs (Google Analytics, Facebook, Instagram, Meta Ads, LinkedIn)
 
-For numbers that are easier to screenshot than export. **Manage data > Screenshots**:
+For numbers that are easier to screenshot or save as a PDF than export as a spreadsheet.
+**Manage data > Screenshots & PDFs**:
 
-1. Choose the platform. Add up to 5 screenshots: drag them in, choose them, or paste with
-   Ctrl+V / Cmd+V straight after taking the screenshot.
-2. **Read screenshots.** AI reads the numbers (15 to 60 seconds). Nothing is saved yet.
-3. Check every value against the screenshot (click **#1**, **#2** to see which one it came
+1. Choose the platform. Add up to 5 files: drag them in, choose them, or paste a screenshot with
+   Ctrl+V / Cmd+V straight after taking it. PDFs (a GA4 or Meta report export, or a page saved as
+   PDF) can be up to 3.5 MB each, 4 MB in total.
+2. **Read numbers.** AI reads the numbers (15 to 60 seconds). Nothing is saved yet.
+3. Check every value against the original (click **#1**, **#2** to see which file it came
    from). Fix anything wrong, untick anything you don't want, and confirm the dates.
-4. **Save checked values.** The screenshots are kept with the upload, and it can be rolled
+4. **Save checked values.** The files are kept with the upload, and it can be rolled
    back from the history like any other upload.
 
-What makes screenshots read well:
+Who reads what: CSV and Excel files on **Upload a file** are read by fixed rules, with no AI.
+Only this tab uses AI, and nothing it reads is saved until a person checks it.
+
+What makes screenshots and PDFs read well:
 
 - Set the date range in the platform first and keep the dates visible. If the screen only says
   "Last 28 days", enter the exact dates yourself.
@@ -94,7 +99,7 @@ Rates (engagement rate, CTR, cost per lead) are ignored on purpose: the portal w
 from the underlying numbers. On LinkedIn, reactions, comments, reposts and clicks are added up into
 Interactions.
 
-Reading costs roughly 5 to 25 cents per batch of screenshots, depending on how many and how large. It needs `ANTHROPIC_API_KEY` set in Vercel.
+Reading costs roughly 5 to 25 cents per batch, depending on how many files and pages. It needs `ANTHROPIC_API_KEY` set in Vercel.
 
 ## Enter manually
 

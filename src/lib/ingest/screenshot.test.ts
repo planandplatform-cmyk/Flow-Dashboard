@@ -124,7 +124,7 @@ describe("building the batch from reviewed values", () => {
 });
 
 describe("the request sent to Claude", () => {
-  it("sends every image with structured output and refusal fallback", async () => {
+  it("sends every image and PDF with structured output and refusal fallback", async () => {
     vi.resetModules();
     const parse = vi.fn().mockResolvedValue({ stop_reason: "end_turn", parsed_output: extraction() });
     vi.doMock("server-only", () => ({}));
@@ -140,6 +140,7 @@ describe("the request sent to Claude", () => {
       [
         { data: "AAAA", mediaType: "image/png" },
         { data: "BBBB", mediaType: "image/webp" },
+        { data: "CCCC", mediaType: "application/pdf" },
       ],
       "meta_facebook",
       "2026-10-07",
@@ -152,6 +153,8 @@ describe("the request sent to Claude", () => {
     expect(req.output_config.format.type).toBe("json_schema");
     const images = req.messages[0].content.filter((c: { type: string }) => c.type === "image");
     expect(images.map((i: { source: { media_type: string } }) => i.source.media_type)).toEqual(["image/png", "image/webp"]);
+    const docs = req.messages[0].content.filter((c: { type: string }) => c.type === "document");
+    expect(docs).toEqual([{ type: "document", source: { type: "base64", media_type: "application/pdf", data: "CCCC" } }]);
     expect(req.messages[0].content.at(-1).text).toMatch(/fb_views/);
   });
 
@@ -159,5 +162,30 @@ describe("the request sent to Claude", () => {
     const schema = extractionSchema("linkedin");
     const bad = { ...extraction(), metrics: [{ key: "fb_views", value: 1, value_text: "1", label_seen: "x", image_index: 1, confidence: "high" }] };
     expect(schema.safeParse(bad).success).toBe(false);
+  });
+});
+
+describe("Google Analytics reports", () => {
+  it("saves GA4 totals as period values", () => {
+    const r = buildScreenshotResult({
+      platform: "ga4",
+      period: { start: "2026-09-01", end: "2026-09-30" },
+      campaignName: null,
+      metrics: [
+        { key: "ga4_sessions", value: 1200 },
+        { key: "ga4_users", value: 950 },
+      ],
+      breakdowns: [],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.batch.period.map((p) => [p.source, p.metric_key, p.value])).toEqual([
+      ["ga4", "ga4_sessions", 1200],
+      ["ga4", "ga4_users", 950],
+    ]);
+  });
+
+  it("does not let the model report a rate", () => {
+    const keys = extractionSchema("ga4").shape.metrics.element.shape.key.options;
+    expect(keys).not.toContain("ga4_engagement_rate");
   });
 });

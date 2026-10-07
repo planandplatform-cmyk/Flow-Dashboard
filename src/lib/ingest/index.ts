@@ -36,6 +36,7 @@ export function parseUpload(data: ArrayBuffer | Uint8Array, ctx: ParseContext): 
   const size = data.byteLength;
   if (size === 0) return failure("The file is empty.");
   if (size > MAX_UPLOAD_BYTES) return failure("The file is larger than 4 MB. Export a shorter date range and try again.");
+  if (/\.pdf$/i.test(ctx.fileName)) return failure("PDFs are read on the Screenshots & PDFs tab, where AI reads the numbers and you check them.");
   if (!ACCEPTED.test(ctx.fileName)) return failure("Upload a CSV or Excel file (.csv, .xlsx, .xls).");
 
   let sheets;

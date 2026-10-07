@@ -87,7 +87,7 @@ export function UploadPanel({ slug, clientName, sources }: { slug: string; clien
           </select>
         </Field>
 
-        <Field label="File" htmlFor="file" hint="CSV or Excel exported from the platform, up to 4 MB.">
+        <Field label="File" htmlFor="file" hint="CSV or Excel exported from the platform, up to 4 MB. For PDFs, use the Screenshots & PDFs tab.">
           <label
             htmlFor="file"
             className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-line bg-raised px-4 py-6 text-center transition hover:border-teal"
