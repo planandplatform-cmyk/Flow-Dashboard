@@ -16,7 +16,7 @@ magic-link auth, row-level security), deployed on Vercel.
 | `src/lib/data/portal.ts` | All data reads. Queries run as the signed-in user, so RLS decides what comes back. |
 | `src/app/c/[slug]` | Client report page, laid out like the monthly PDF. |
 | `src/app/admin/c/[slug]/data` | FFM-only data page: file upload with preview, manual entry, upload history with rollback. |
-| `src/lib/ingest` | File reading and one parser per platform export. See [docs/uploading-data.md](docs/uploading-data.md). |
+| `src/lib/ingest` | File reading and one parser per platform export, plus AI screenshot reading (`screenshot.ts`, `screenshot-reader.ts`). See [docs/uploading-data.md](docs/uploading-data.md). |
 | `supabase/migrations` | Schema and row-level security. |
 | `supabase/seed.sql` | Demo client (Wieler Roofing). Generated, do not edit by hand. |
 | `supabase/tests/rls.test.sql` | Proves a client user cannot read another client's data. |
@@ -72,7 +72,8 @@ npm run seed:generate
    - *Emails → SMTP Settings*: connect a real sender (Resend, Postmark...). Supabase's
      built-in sender is heavily rate-limited and not meant for production.
 6. **Environment variables** (Vercel project settings, and `.env.local` for local dev).
-   Copy `.env.example`. Values come from *Project Settings → API Keys*.
+   Copy `.env.example`. Supabase values come from *Project Settings → API Keys*;
+   `ANTHROPIC_API_KEY` (for reading screenshots) from https://platform.claude.com.
 7. **Make yourself an admin.** Invite yourself from *Authentication → Users → Invite user*,
    then run in the SQL Editor:
 

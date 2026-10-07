@@ -1,0 +1,163 @@
+import { describe, expect, it, vi } from "vitest";
+import { buildScreenshotResult, extractionSchema, reviewExtraction, type Extraction } from "./screenshot";
+
+const july = { start: "2026-07-01", end: "2026-07-31" };
+
+const extraction = (over: Partial<Extraction> = {}): Extraction => ({
+  is_analytics_screenshot: true,
+  platform_seen: "facebook",
+  date_range: { start: "2026-07-01", end: "2026-07-31", label: "Jul 1 - Jul 31, 2026" },
+  metrics: [
+    { key: "fb_views", value: 21239, value_text: "21,239", label_seen: "Views", image_index: 1, confidence: "high" },
+    { key: "fb_interactions", value: 362, value_text: "362", label_seen: "Content interactions", image_index: 1, confidence: "high" },
+    { key: "fb_followers", value: 51, value_text: "51", label_seen: "Followers", image_index: 2, confidence: "medium" },
+  ],
+  breakdowns: [
+    { type: "discovery_surface", bucket: "Feed", percent: 58, image_index: 2, confidence: "high" },
+    { type: "discovery_surface", bucket: "Reels", percent: 36.4, image_index: 2, confidence: "high" },
+  ],
+  campaign_name: null,
+  notes: [],
+  ...over,
+});
+
+describe("reviewing what the model read", () => {
+  it("uses the dates on screen and keeps exact values", () => {
+    const r = reviewExtraction(extraction(), "meta_facebook", undefined);
+    expect(r.errors).toEqual([]);
+    expect(r.period).toEqual(july);
+    expect(r.items.map((i) => [i.key, i.value])).toEqual([["fb_views", 21239], ["fb_interactions", 362], ["fb_followers", 51]]);
+  });
+
+  it("flags rounded numbers and trusts the printed text over the model's number", () => {
+    const r = reviewExtraction(
+      extraction({
+        metrics: [
+          { key: "fb_views", value: 21200, value_text: "21.2K", label_seen: "Views", image_index: 1, confidence: "high" },
+          { key: "fb_reach", value: 13200, value_text: "13,020", label_seen: "Reach", image_index: 1, confidence: "high" },
+        ],
+      }),
+      "meta_facebook",
+      undefined,
+    );
+    expect(r.items[0]).toMatchObject({ value: 21200, confidence: "medium" });
+    expect(r.items[0].note).toMatch(/rounded/);
+    expect(r.items[1]).toMatchObject({ value: 13020 });
+    expect(r.items[1].note).toMatch(/screen shows 13,020/);
+  });
+
+  it("asks for dates when only a relative range is shown, and uses entered dates", () => {
+    const relative = extraction({ date_range: null, notes: ["Range shown: Last 28 days"] });
+    const missing = reviewExtraction(relative, "meta_facebook", undefined);
+    expect(missing.period).toBeNull();
+    expect(missing.errors[0]).toMatch(/No dates are visible/);
+    expect(reviewExtraction(relative, "meta_facebook", july).period).toEqual(july);
+  });
+
+  it("warns when the screenshot is from another platform or not analytics", () => {
+    expect(reviewExtraction(extraction({ platform_seen: "instagram" }), "meta_facebook", undefined).warnings[0]).toMatch(/instagram/);
+    expect(reviewExtraction(extraction({ is_analytics_screenshot: false }), "meta_facebook", undefined).errors[0]).toMatch(/do not look like/);
+  });
+});
+
+describe("building the batch from reviewed values", () => {
+  it("stores totals for the range and followers on the last day", () => {
+    const r = buildScreenshotResult({
+      platform: "meta_facebook",
+      period: july,
+      campaignName: null,
+      metrics: [
+        { key: "fb_views", value: 21239 },
+        { key: "fb_followers", value: 51 },
+      ],
+      breakdowns: [{ type: "discovery_surface", bucket: "Feed", percent: 58 }],
+    });
+    expect(r.ok).toBe(true);
+    expect(r.batch.period).toEqual([expect.objectContaining({ metric_key: "fb_views", period_start: "2026-07-01", period_end: "2026-07-31", value: 21239 })]);
+    expect(r.batch.daily).toEqual([expect.objectContaining({ metric_key: "fb_followers", date: "2026-07-31", value: 51 })]);
+    expect(r.batch.snapshots[0]).toMatchObject({ breakdown_type: "discovery_surface", share: 0.58, period_start: "2026-07-01" });
+  });
+
+  it("adds up LinkedIn interaction components", () => {
+    const r = buildScreenshotResult({
+      platform: "linkedin",
+      period: july,
+      campaignName: null,
+      metrics: [
+        { key: "li_impressions", value: 5400 },
+        { key: "li_reactions", value: 80 },
+        { key: "li_comments", value: 6 },
+        { key: "li_clicks", value: 40 },
+      ],
+      breakdowns: [],
+    });
+    expect(r.ok).toBe(true);
+    expect(r.batch.period.find((p) => p.metric_key === "li_interactions")?.value).toBe(126);
+    expect(r.warnings.join(" ")).toMatch(/missing: Reposts/);
+  });
+
+  it("creates a campaign for Meta Ads so the report's ad section shows", () => {
+    const r = buildScreenshotResult({
+      platform: "meta_ads",
+      period: { start: "2026-07-14", end: "2026-08-06" },
+      campaignName: "Roof Inspection Lead Gen",
+      metrics: [
+        { key: "ads_spend", value: 719.19 },
+        { key: "ads_reach", value: 13020 },
+        { key: "ads_leads", value: 23 },
+      ],
+      breakdowns: [],
+    });
+    expect(r.ok).toBe(true);
+    expect(r.batch.adCampaigns[0]).toMatchObject({ name: "Roof Inspection Lead Gen", start_date: "2026-07-14", end_date: "2026-08-06" });
+    expect(r.batch.period.filter((p) => p.dimension === "").map((p) => p.metric_key).sort()).toEqual(["ads_leads", "ads_reach", "ads_spend"]);
+  });
+
+  it("rejects bad input from the browser", () => {
+    const base = { platform: "meta_facebook" as const, period: july, campaignName: null, breakdowns: [] };
+    expect(buildScreenshotResult({ ...base, metrics: [{ key: "ig_views", value: 1 }] }).ok).toBe(false);
+    expect(buildScreenshotResult({ ...base, metrics: [{ key: "fb_views", value: Number.NaN }] }).ok).toBe(false);
+    expect(buildScreenshotResult({ ...base, metrics: [{ key: "fb_views", value: -3 }] }).ok).toBe(false);
+    expect(buildScreenshotResult({ ...base, period: { start: "2026-07-31", end: "2026-07-01" }, metrics: [{ key: "fb_views", value: 1 }] }).ok).toBe(false);
+    expect(buildScreenshotResult({ ...base, metrics: [{ key: "fb_views", value: 1 }, { key: "fb_views", value: 2 }] }).ok).toBe(false);
+  });
+});
+
+describe("the request sent to Claude", () => {
+  it("sends every image with structured output and refusal fallback", async () => {
+    vi.resetModules();
+    const parse = vi.fn().mockResolvedValue({ stop_reason: "end_turn", parsed_output: extraction() });
+    vi.doMock("server-only", () => ({}));
+    vi.doMock("@anthropic-ai/sdk", async () => {
+      const actual = await vi.importActual<typeof import("@anthropic-ai/sdk")>("@anthropic-ai/sdk");
+      class Fake {
+        beta = { messages: { parse } };
+      }
+      return { ...actual, default: Object.assign(Fake, actual.default) };
+    });
+    const { readScreenshots } = await import("./screenshot-reader");
+    const out = await readScreenshots(
+      [
+        { data: "AAAA", mediaType: "image/png" },
+        { data: "BBBB", mediaType: "image/webp" },
+      ],
+      "meta_facebook",
+      "2026-10-07",
+    );
+    expect(out.metrics).toHaveLength(3);
+    const req = parse.mock.calls[0][0];
+    expect(req.model).toBe("claude-opus-5-5");
+    expect(req.fallbacks).toBe("default");
+    expect(req.betas).toEqual(["server-side-fallback-2026-07-01"]);
+    expect(req.output_config.format.type).toBe("json_schema");
+    const images = req.messages[0].content.filter((c: { type: string }) => c.type === "image");
+    expect(images.map((i: { source: { media_type: string } }) => i.source.media_type)).toEqual(["image/png", "image/webp"]);
+    expect(req.messages[0].content.at(-1).text).toMatch(/fb_views/);
+  });
+
+  it("only allows the chosen platform's metric keys", () => {
+    const schema = extractionSchema("linkedin");
+    const bad = { ...extraction(), metrics: [{ key: "fb_views", value: 1, value_text: "1", label_seen: "x", image_index: 1, confidence: "high" }] };
+    expect(schema.safeParse(bad).success).toBe(false);
+  });
+});

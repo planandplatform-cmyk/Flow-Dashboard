@@ -7,16 +7,19 @@ import { ReportSkeleton } from "@/components/skeleton";
 import { getClientBySlug, getViewer, isFfm } from "@/lib/data/portal";
 import { listUploads } from "@/lib/data/uploads";
 import { BREAKDOWNS } from "@/lib/ingest/manual";
+import { screenshotReadingConfigured } from "@/lib/ingest/screenshot-reader";
 import { METRICS } from "@/lib/metrics/config";
 import { DATA_SOURCES, SOCIAL_SOURCES, SOURCE_LABELS } from "@/lib/metrics/types";
 import { ManualEntry, type MetricOption } from "./manual-entry";
 import { UploadHistory } from "./upload-history";
+import { ScreenshotPanel } from "./screenshot-panel";
 import { UploadPanel } from "./upload-panel";
 
 export const metadata: Metadata = { title: "Manage data" };
 
 const TABS = [
   { id: "upload", label: "Upload a file" },
+  { id: "screenshots", label: "Screenshots" },
   { id: "manual", label: "Enter manually" },
   { id: "history", label: "Upload history" },
 ] as const;
@@ -92,6 +95,7 @@ async function DataPageContent(props: PageProps<"/admin/c/[slug]/data">) {
 
         <div className="mt-8">
           {tab === "upload" && <UploadPanel slug={client.slug} clientName={client.name} sources={sources} />}
+          {tab === "screenshots" && <ScreenshotPanel slug={client.slug} clientName={client.name} configured={screenshotReadingConfigured()} />}
           {tab === "manual" && (
             <ManualEntry
               slug={client.slug}

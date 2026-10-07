@@ -1,7 +1,8 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { getClientBySlug, getViewer, isFfm, type Client } from "@/lib/data/portal";
+import { authorizeStaffForClient } from "@/lib/data/authorize";
+import type { Client } from "@/lib/data/portal";
 import type { UploadOverlap } from "@/lib/data/uploads";
 import { parseUpload } from "@/lib/ingest";
 import { buildManualBatch, readPeriod } from "@/lib/ingest/manual";
@@ -32,13 +33,7 @@ export type CommitState =
   | { status: "error"; message: string }
   | { status: "done"; inserted: number; updated: number; uploadId: string };
 
-async function authorize(slug: string): Promise<{ client: Client } | { error: string }> {
-  const viewer = await getViewer();
-  if (!viewer || !isFfm(viewer.role)) return { error: "Only Flow Forward Media staff can manage data." };
-  const client = await getClientBySlug(slug);
-  if (!client) return { error: "Client not found." };
-  return { client };
-}
+const authorize = authorizeStaffForClient;
 
 function readSource(value: FormDataEntryValue | null): DataSource | undefined {
   const s = String(value ?? "");

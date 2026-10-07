@@ -13,13 +13,15 @@
     "test:rls": "bash scripts/test-rls-local.sh"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
