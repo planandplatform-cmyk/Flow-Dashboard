@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isDemoMode, isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+import { isDemoMode, isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabaseConfigProblem } from "@/lib/supabase/env";
 
 const PUBLIC_PATHS = ["/login", "/auth/"];
 
@@ -12,7 +12,12 @@ const PUBLIC_PATHS = ["/login", "/auth/"];
 export async function proxy(request: NextRequest) {
   if (isDemoMode()) return NextResponse.next();
   if (!isSupabaseConfigured()) {
-    return new NextResponse("Supabase is not configured.", { status: 500 });
+    // Shown instead of a bare 500 so a settings typo is easy to spot. Says
+    // which variable is wrong, never its value.
+    return new NextResponse(
+      `The portal is not connected to Supabase yet.\n\n${supabaseConfigProblem()}\n\nFix it in Vercel (Settings, Environment Variables), then redeploy.`,
+      { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
   }
 
   let response = NextResponse.next({ request });
