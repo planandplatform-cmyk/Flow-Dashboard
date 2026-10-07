@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { InfoTip, MetricLabel } from "@/components/info-tip";
-import { DeltaBadge, KpiTile } from "@/components/kpi";
+import { BigDelta, KpiTile } from "@/components/kpi";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
 import { Card, DataTable, Prose, Section, ShareBars } from "@/components/section";
@@ -497,10 +497,15 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 const prefix = def.source === "combined" ? "" : `${SOURCE_LABELS[def.source as DataSource]} `;
                 return (
                   <Card key={k} className="relative overflow-hidden p-5">
-                    <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-teal via-teal-600 to-teal-800" />
+                    <div
+                      aria-hidden
+                      className={`absolute inset-x-0 top-0 h-1 ${
+                        c.sentiment === "positive" ? "bg-positive" : c.sentiment === "negative" ? "bg-negative" : "bg-line"
+                      }`}
+                    />
                     <MetricLabel metricKey={k} label={`${prefix}${def.label}`} className="block text-xs font-medium uppercase tracking-wider text-fg-secondary" />
                     <div className="mt-3">
-                      <DeltaBadge metricKey={k} comparison={c} showDelta={false} />
+                      <BigDelta comparison={c} />
                     </div>
                     <p className="mt-3 text-sm tabular-nums text-fg-secondary">
                       {formatMetric(k, c.previous)} <span className="text-fg-muted">→</span>{" "}

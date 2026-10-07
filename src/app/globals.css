@@ -35,9 +35,10 @@
   --color-teal-900: #073f3f;
   --color-teal-950: #042424;
 
-  /* Change indicators. Teal is good news; coral is bad news. No green. */
-  --color-positive: #31e4e4;
-  --color-negative: #ff7b6e;
+  /* Change indicators: green is good news, red is bad news (also used for
+     errors). Both pass WCAG AA on black and on the dark cards. */
+  --color-positive: #4ade80;
+  --color-negative: #f87171;
 }
 
 :root {

@@ -14,7 +14,7 @@ export function DeltaBadge({
   if (!comparison || comparison.direction === null) return null;
   const tone =
     comparison.sentiment === "positive"
-      ? "text-positive bg-teal-950 border-teal-800"
+      ? "text-positive bg-positive/10 border-positive/30"
       : comparison.sentiment === "negative"
         ? "text-negative bg-negative/10 border-negative/30"
         : "text-fg-secondary bg-raised border-line";
@@ -28,6 +28,31 @@ export function DeltaBadge({
         <span className="text-fg-secondary">({formatDelta(metricKey, comparison.delta)})</span>
       )}
     </span>
+  );
+}
+
+/**
+ * Large month-over-month change, ticker style: green when the change is good
+ * news, red when it is bad news. The arrow shows the direction, so a cost that
+ * went up reads as a red up arrow.
+ */
+export function BigDelta({ comparison }: { comparison: Comparison }) {
+  if (comparison.direction === null) return <p className="text-3xl font-semibold text-fg-muted">N/A</p>;
+  const color =
+    comparison.sentiment === "positive" ? "text-positive" : comparison.sentiment === "negative" ? "text-negative" : "text-fg-secondary";
+  const arrow = comparison.direction === "up" ? "\u25B2" : comparison.direction === "down" ? "\u25BC" : "";
+  const label =
+    comparison.direction === "up" ? "Increase" : comparison.direction === "down" ? "Decrease" : "No change";
+  return (
+    <p className={`flex items-center gap-2 text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl ${color}`}>
+      {arrow && (
+        <span aria-hidden className="text-lg sm:text-xl">
+          {arrow}
+        </span>
+      )}
+      <span>{comparison.pctChange === null ? "New" : formatPctChange(comparison.pctChange)}</span>
+      <span className="sr-only">{label}</span>
+    </p>
   );
 }
 
