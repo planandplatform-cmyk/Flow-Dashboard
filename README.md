@@ -89,6 +89,15 @@ npm run seed:generate
 
    Everything after that happens in the portal.
 
+## Deploying (Vercel)
+
+The Vercel project builds automatically on every push to the production branch. Environment
+variables live in Vercel under *Settings → Environment Variables*: `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SITE_URL`, and optionally
+`ANTHROPIC_API_KEY`. After changing a variable, redeploy (*Deployments → ⋯ → Redeploy*) for it to
+take effect. Database changes are not deployed by Vercel: run new files in `supabase/migrations`
+in the Supabase SQL Editor.
+
 ## Adding a client
 
 1. On the client list, **+ New client**: name, market, time zone, and the channels this client
