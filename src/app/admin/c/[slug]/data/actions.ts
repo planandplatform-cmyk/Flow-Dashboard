@@ -52,18 +52,22 @@ async function parseFromForm(form: FormData): Promise<{ result: ParseResult; fil
   return { result, file };
 }
 
+/** Data is only accepted for channels the client has turned on. */
+function disabledSourceError(sources: DataSource[], client: Client): string | null {
+  const disabled = sources.filter((s) => !client.enabled_sources.includes(s));
+  if (!disabled.length) return null;
+  const names = disabled.map((s) => SOURCE_LABELS[s]).join(" or ");
+  return `${client.name} does not have ${names} turned on. Turn it on in the client's Settings first, or check that this is the right client.`;
+}
+
 function summarizeResult(result: ParseResult, client: Client): PreviewSummary {
   const { batch, ...rest } = result;
-  const disabled = result.sources.filter((s) => !client.enabled_sources.includes(s));
-  const warnings = [...rest.warnings];
-  if (disabled.length) {
-    warnings.unshift(
-      `${client.name} does not have ${disabled.map((s) => SOURCE_LABELS[s]).join(" or ")} turned on. The data will be saved but stays hidden from the report until it is turned on.`,
-    );
-  }
+  const channelError = disabledSourceError(result.sources, client);
+  const errors = channelError ? [channelError, ...rest.errors] : rest.errors;
   return {
     ...rest,
-    warnings,
+    ok: rest.ok && !channelError,
+    errors,
     counts: {
       daily: batch.daily.length,
       period: batch.period.length,
@@ -93,7 +97,7 @@ export async function previewUpload(slug: string, _prev: PreviewState, form: For
   const { result, file } = parsed;
 
   let overlap: UploadOverlap | null = null;
-  if (result.ok && !isDemoMode()) {
+  if (result.ok && !isDemoMode() && !disabledSourceError(result.sources, auth.client)) {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("preview_upload", { p_client_id: auth.client.id, p_batch: result.batch });
     if (error) return { status: "error", message: `Could not compare with existing data: ${error.message}` };
@@ -110,6 +114,8 @@ export async function commitUpload(slug: string, form: FormData): Promise<Commit
   if ("error" in parsed) return { status: "error", message: parsed.error };
   const { result, file } = parsed;
   if (!result.ok) return { status: "error", message: result.errors.join(" ") };
+  const channelError = disabledSourceError(result.sources, auth.client);
+  if (channelError) return { status: "error", message: channelError };
 
   const supabase = await createClient();
   const uploadId = crypto.randomUUID();
@@ -175,6 +181,8 @@ export async function saveManualEntry(slug: string, _prev: ManualState, form: Fo
   if ("error" in auth) return { status: "error", message: auth.error };
   const built = buildManualBatch(form);
   if ("error" in built) return { status: "error", message: built.error };
+  const channelError = disabledSourceError([built.source], auth.client);
+  if (channelError) return { status: "error", message: channelError };
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("commit_upload", {

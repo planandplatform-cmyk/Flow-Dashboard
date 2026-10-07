@@ -26,6 +26,7 @@ import {
   SNAPSHOTS,
   type MonthTotals,
 } from "./seed/wieler-roofing";
+import { generateMedSpa, MED_SPA } from "./seed/lubbock-med-spa";
 
 const ROOT = join(__dirname, "..");
 
@@ -360,6 +361,35 @@ sql.push(
     ";\n",
 );
 
+// Second demo client (synthetic): organic social + website, no ads.
+const medSpa = generateMedSpa();
+sql.push(`
+-- Demo client 2: Lubbock Med Spa. ALL SYNTHETIC. Organic Facebook, Instagram, GA4; no Meta Ads.
+delete from public.clients where id = ${q(MED_SPA.id)};
+insert into public.clients (id, name, slug, enabled_sources, timezone, market)
+values (${q(MED_SPA.id)}, ${q(MED_SPA.name)}, ${q(MED_SPA.slug)},
+        array[${MED_SPA.enabled_sources.map(q).join(", ")}]::public.data_source[],
+        ${q(MED_SPA.timezone)}, ${q(MED_SPA.market)});
+`);
+for (const rows of chunk(medSpa.daily, 1000)) {
+  sql.push(
+    `insert into public.metrics_daily (client_id, source, metric_key, date, dimension, dimension_value, value) values\n` +
+      rows
+        .map((r) => `(${q(MED_SPA.id)}, ${q(r.source)}, ${q(r.metric_key)}, ${q(r.date)}, ${q(r.dimension)}, ${q(r.dimension_value)}, ${r.value})`)
+        .join(",\n") +
+      ";\n",
+  );
+}
+sql.push(
+  `insert into public.audience_snapshots (client_id, platform, snapshot_date, period_start, breakdown_type, bucket, share) values\n` +
+    medSpa.snapshots.map((s) => `(${q(MED_SPA.id)}, ${q(s.platform)}, '2026-07-31', null, ${q(s.type)}, ${q(s.bucket)}, ${s.share})`).join(",\n") +
+    ";\n",
+);
+sql.push(`insert into public.monthly_commentary (client_id, month, headline, summary, conclusion, status, published_at)
+values (${q(MED_SPA.id)}, ${q(medSpa.commentary.month)}, ${q(medSpa.commentary.headline)}, ${q(medSpa.commentary.summary)},
+        ${q(medSpa.commentary.conclusion)}, 'published', '2026-08-08T15:00:00Z');
+`);
+
 sql.push("commit;\n");
 
 const seedPath = join(ROOT, "supabase", "seed.sql");
@@ -369,35 +399,59 @@ writeFileSync(seedPath, sql.join("\n"));
 // Emit demo fixture (used when Supabase env vars are not set, dev only)
 // ---------------------------------------------------------------------------
 
+const W = CLIENT.id;
+const M = MED_SPA.id;
 const fixture = {
-  client: { ...CLIENT, logo_url: null, brand_color: null },
-  metricsDaily: daily.map(({ source, metric_key, date, dimension, dimension_value, value }) => ({
-    source,
-    metric_key,
-    date,
-    dimension,
-    dimension_value,
-    value,
-  })),
-  metricsPeriod: period,
-  adCampaigns: [{ ...AD_CAMPAIGN, totals: undefined }],
-  adMetricsDaily: adDaily.map((d) => ({ ...d, campaign_id: AD_CAMPAIGN.id })),
-  posts: POSTS,
-  audienceSnapshots: SNAPSHOTS.map((s) => ({
-    platform: s.platform,
-    breakdown_type: s.type,
-    bucket: s.bucket,
-    share: s.share,
-    snapshot_date: "2026-07-31",
-    period_start: PERIOD_TYPES.has(s.type) ? "2026-07-01" : null,
-  })),
-  commentary: [{ ...c, status: "published" }],
-  annotations: ANNOTATIONS,
+  clients: [
+    { ...CLIENT, logo_url: null, brand_color: null },
+    { ...MED_SPA, logo_url: null, brand_color: null },
+  ],
+  metricsDaily: [
+    ...daily.map(({ source, metric_key, date, dimension, dimension_value, value }) => ({
+      client_id: W,
+      source,
+      metric_key,
+      date,
+      dimension,
+      dimension_value,
+      value,
+    })),
+    ...medSpa.daily.map((r) => ({ client_id: M, ...r })),
+  ],
+  metricsPeriod: period.map((p) => ({ client_id: W, ...p })),
+  adCampaigns: [{ ...AD_CAMPAIGN, totals: undefined, client_id: W }],
+  adMetricsDaily: adDaily.map((d) => ({ ...d, campaign_id: AD_CAMPAIGN.id, client_id: W })),
+  posts: POSTS.map((p) => ({ client_id: W, ...p })),
+  audienceSnapshots: [
+    ...SNAPSHOTS.map((s) => ({
+      client_id: W,
+      platform: s.platform,
+      breakdown_type: s.type,
+      bucket: s.bucket,
+      share: s.share,
+      snapshot_date: "2026-07-31",
+      period_start: PERIOD_TYPES.has(s.type) ? "2026-07-01" : null,
+    })),
+    ...medSpa.snapshots.map((s) => ({
+      client_id: M,
+      platform: s.platform,
+      breakdown_type: s.type,
+      bucket: s.bucket,
+      share: s.share,
+      snapshot_date: "2026-07-31",
+      period_start: null,
+    })),
+  ],
+  commentary: [
+    { ...c, client_id: W, status: "published" },
+    { ...medSpa.commentary, client_id: M, platform_narratives: {}, section_notes: {}, status: "published" },
+  ],
+  annotations: ANNOTATIONS.map((a) => ({ client_id: W, ...a })),
 };
 const fixturePath = join(ROOT, "src", "lib", "demo", "fixture.json");
 mkdirSync(dirname(fixturePath), { recursive: true });
 writeFileSync(fixturePath, JSON.stringify(fixture));
 
-console.log(`Wrote ${daily.length} daily rows, ${adDaily.length} ad rows`);
+console.log(`Wrote ${daily.length + medSpa.daily.length} daily rows (2 clients), ${adDaily.length} ad rows`);
 console.log(`  ${seedPath}`);
 console.log(`  ${fixturePath}`);

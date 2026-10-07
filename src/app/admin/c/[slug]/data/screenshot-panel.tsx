@@ -88,8 +88,19 @@ interface BRow {
   confidence: "high" | "medium" | "low";
 }
 
-export function ScreenshotPanel({ slug, clientName, configured }: { slug: string; clientName: string; configured: boolean }) {
-  const [platform, setPlatform] = useState<ScreenshotPlatform>("meta_facebook");
+export function ScreenshotPanel({
+  slug,
+  clientName,
+  configured,
+  enabled,
+}: {
+  slug: string;
+  clientName: string;
+  configured: boolean;
+  enabled: string[];
+}) {
+  const platforms = PLATFORMS.filter((p) => enabled.includes(p.value));
+  const [platform, setPlatform] = useState<ScreenshotPlatform>(platforms[0]?.value ?? "meta_facebook");
   const [shots, setShots] = useState<Shot[]>([]);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
@@ -149,6 +160,10 @@ export function ScreenshotPanel({ slug, clientName, configured }: { slug: string
     setShots((s) => s.filter((x) => x.id !== id));
   }
 
+  if (!platforms.length) {
+    return <Notice tone="info">{clientName} has no Facebook, Instagram, Meta Ads or LinkedIn channel turned on. Turn one on in Settings to read screenshots.</Notice>;
+  }
+
   if (!configured) {
     return (
       <Notice tone="info" title="Screenshot reading is not set up yet">
@@ -163,7 +178,7 @@ export function ScreenshotPanel({ slug, clientName, configured }: { slug: string
       <div className="space-y-5 self-start rounded-xl border border-line bg-surface p-5">
         <Field label="Platform" htmlFor="shot-platform">
           <select id="shot-platform" value={platform} onChange={(e) => setPlatform(e.target.value as ScreenshotPlatform)} className={inputClass}>
-            {PLATFORMS.map((p) => (
+            {platforms.map((p) => (
               <option key={p.value} value={p.value}>
                 {p.label}
               </option>

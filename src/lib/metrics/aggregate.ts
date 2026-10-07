@@ -194,6 +194,18 @@ export class MetricResolver {
   }
 }
 
+/**
+ * Drop rows for metrics whose source is not turned on for the client. Combined
+ * metrics (Total Audience Reach...) then only add up the client's channels.
+ */
+export function onlyEnabledSources(data: MetricData, enabled: ReadonlySet<string>): MetricData {
+  const keep = (key: string) => {
+    const source = METRICS[key]?.source;
+    return source !== undefined && source !== "combined" && enabled.has(source);
+  };
+  return { daily: data.daily.filter((r) => keep(r.metric_key)), period: data.period.filter((r) => keep(r.metric_key)) };
+}
+
 function dayCount(start: ISODate, end: ISODate): number {
   return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
 }

@@ -69,25 +69,35 @@ npm run seed:generate
    - *Emails → Templates → Magic Link*: change the link to
      `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`
      so links work even when opened on a different device than the one that asked for them.
+   - *Emails → Templates → Invite user*: change the link to
+     `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite`
+     (after signing in, client logins land straight on their own report).
    - *Emails → SMTP Settings*: connect a real sender (Resend, Postmark...). Supabase's
      built-in sender is heavily rate-limited and not meant for production.
 6. **Environment variables** (Vercel project settings, and `.env.local` for local dev).
    Copy `.env.example`. Supabase values come from *Project Settings → API Keys*;
    `ANTHROPIC_API_KEY` (for reading screenshots) from https://platform.claude.com.
 7. **Make yourself an admin.** Invite yourself from *Authentication → Users → Invite user*,
-   then run in the SQL Editor:
+   sign in once, then run in the SQL Editor:
 
    ```sql
    update public.users set role = 'ffm_admin' where email = 'you@flowforwardmedia.com';
    ```
 
-   To give a client access to their report (admin screens for this arrive in Phase 4):
+   Everything after that happens in the portal.
 
-   ```sql
-   insert into public.user_clients (user_id, client_id)
-   select u.id, c.id from public.users u, public.clients c
-   where u.email = 'owner@wielerroofing.com' and c.slug = 'wieler-roofing';
-   ```
+## Adding a client
+
+1. On the client list, **+ New client**: name, market, time zone, and the channels this client
+   uses (any mix of Website, Facebook, Instagram, Meta Ads, Shopify, TikTok, LinkedIn).
+2. On the next screen, **invite** the people from that business. Each gets an email, signs in
+   with their own address, and only ever sees that client. One person can be given access to
+   several clients (an owner with two businesses sees a list to choose from).
+3. **Manage data** to upload exports or screenshots. Only the client's channels are accepted.
+
+Channels can be changed later in **Settings**. Turning one off hides it from the report and keeps
+its data. **Archive** hides a client from lists and blocks its logins (enforced in the database);
+it can be restored. Admins invite and manage FFM staff under **Team**.
 
 ## Roles
 

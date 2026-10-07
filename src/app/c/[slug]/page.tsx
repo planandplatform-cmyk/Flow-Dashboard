@@ -22,7 +22,7 @@ import {
   type AudienceSnapshot,
 } from "@/lib/data/portal";
 import { addMonths, daysBetween, formatDay, formatMonth, formatRange, isValidMonthParam, monthOf, monthRange } from "@/lib/dates";
-import { compare, MetricResolver, type DateRange } from "@/lib/metrics/aggregate";
+import { compare, MetricResolver, onlyEnabledSources, type DateRange } from "@/lib/metrics/aggregate";
 import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
@@ -124,13 +124,19 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     end: [range.end, adsRange?.end ?? range.end].sort().at(-1)!,
   };
 
-  const [data, commentary, posts, snapshots, annotations] = await Promise.all([
+  const [allData, commentary, allPosts, allSnapshots, annotations] = await Promise.all([
     getMetricData(client.id, fetchRange),
     getCommentary(client.id, month),
     getTopPosts(client.id, range, 8),
     getAudienceSnapshots(client.id, range),
     getAnnotations(client.id, range),
   ]);
+
+  // Only the client's turned-on channels appear anywhere in the report,
+  // including combined totals, even if older data exists for others.
+  const data = onlyEnabledSources(allData, enabled);
+  const posts = allPosts.filter((p) => enabled.has(p.platform));
+  const snapshots = allSnapshots.filter((s) => enabled.has(s.platform));
 
   const resolver = new MetricResolver(data);
   const val = (key: string, r: DateRange = range) => resolver.resolve(key, r).value;

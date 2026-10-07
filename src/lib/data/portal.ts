@@ -1,6 +1,5 @@
 import "server-only";
 import { cache } from "react";
-import fixture from "@/lib/demo/fixture.json";
 import type { DailyRow, DateRange, MetricData, PeriodRow } from "@/lib/metrics/aggregate";
 import type { DataSource } from "@/lib/metrics/types";
 import { isDemoMode } from "@/lib/supabase/env";
@@ -84,6 +83,10 @@ export interface AdCampaign {
   end_date: string | null;
 }
 
+/** Demo data, loaded only in demo mode so it never ships in production code paths. */
+const demo = cache(async () => (await import("@/lib/demo/fixture.json")).default);
+const own = <T extends { client_id: string }>(rows: T[], clientId: string) => rows.filter((r) => r.client_id === clientId);
+
 const isFfm = (role: UserRole) => role === "ffm_admin" || role === "ffm_staff";
 export { isFfm };
 
@@ -122,7 +125,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 const CLIENT_COLUMNS = "id, name, slug, logo_url, brand_color, enabled_sources, timezone, market";
 
 export const listClients = cache(async (): Promise<Client[]> => {
-  if (isDemoMode()) return [fixture.client as Client];
+  if (isDemoMode()) return (await demo()).clients as Client[];
   const supabase = await createClient();
   const { data, error } = await supabase.from("clients").select(CLIENT_COLUMNS).is("archived_at", null).order("name");
   if (error) throw new Error(error.message);
@@ -130,7 +133,7 @@ export const listClients = cache(async (): Promise<Client[]> => {
 });
 
 export const getClientBySlug = cache(async (slug: string): Promise<Client | null> => {
-  if (isDemoMode()) return fixture.client.slug === slug ? (fixture.client as Client) : null;
+  if (isDemoMode()) return ((await demo()).clients.find((c) => c.slug === slug) as Client | undefined) ?? null;
   const supabase = await createClient();
   const { data } = await supabase.from("clients").select(CLIENT_COLUMNS).eq("slug", slug).maybeSingle();
   return (data as Client | null) ?? null;
@@ -146,13 +149,14 @@ export const getClientBySlug = cache(async (slug: string): Promise<Client | null
  */
 export async function getMetricData(clientId: string, range: DateRange): Promise<MetricData> {
   if (isDemoMode()) {
+    const fx = await demo();
     const inRange = (d: string) => d >= range.start && d <= range.end;
     return {
       daily: [
-        ...(fixture.metricsDaily as DailyRow[]).filter((r) => inRange(r.date)),
-        ...adRowsToDaily(fixture.adMetricsDaily.filter((r) => inRange(r.date))),
+        ...(own(fx.metricsDaily, clientId) as DailyRow[]).filter((r) => inRange(r.date)),
+        ...adRowsToDaily(own(fx.adMetricsDaily, clientId).filter((r) => inRange(r.date))),
       ],
-      period: (fixture.metricsPeriod as PeriodRow[]).filter((r) => r.period_start <= range.end && r.period_end >= range.start),
+      period: (own(fx.metricsPeriod, clientId) as PeriodRow[]).filter((r) => r.period_start <= range.end && r.period_end >= range.start),
     };
   }
 
@@ -199,7 +203,7 @@ export async function getMetricData(clientId: string, range: DateRange): Promise
 /** Last date with any metric data for the client, or null. */
 export async function getLatestDataDate(clientId: string): Promise<string | null> {
   if (isDemoMode()) {
-    return fixture.metricsDaily.reduce<string | null>((max, r) => (max === null || r.date > max ? r.date : max), null);
+    return own((await demo()).metricsDaily, clientId).reduce<string | null>((max, r) => (max === null || r.date > max ? r.date : max), null);
   }
   const supabase = await createClient();
   const [daily, period] = await Promise.all([
@@ -216,7 +220,7 @@ export async function getLatestDataDate(clientId: string): Promise<string | null
 
 export async function getTopPosts(clientId: string, range: DateRange, limit = 10): Promise<Post[]> {
   if (isDemoMode()) {
-    return (fixture.posts as unknown as Post[])
+    return (own((await demo()).posts, clientId) as unknown as Post[])
       .filter((p) => p.published_at.slice(0, 10) >= range.start && p.published_at.slice(0, 10) <= range.end)
       .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
       .slice(0, limit);
@@ -238,7 +242,7 @@ export async function getTopPosts(clientId: string, range: DateRange, limit = 10
 export async function getAudienceSnapshots(clientId: string, range: DateRange): Promise<AudienceSnapshot[]> {
   let rows: AudienceSnapshot[];
   if (isDemoMode()) {
-    rows = (fixture.audienceSnapshots as AudienceSnapshot[]).filter((s) => s.snapshot_date <= range.end);
+    rows = (own((await demo()).audienceSnapshots, clientId) as AudienceSnapshot[]).filter((s) => s.snapshot_date <= range.end);
   } else {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -264,7 +268,7 @@ export async function getAudienceSnapshots(clientId: string, range: DateRange): 
 /** Campaigns that were active at any point in the range. */
 export async function getAdCampaigns(clientId: string, range: DateRange): Promise<AdCampaign[]> {
   const overlaps = (c: AdCampaign) => (c.start_date ?? "") <= range.end && (c.end_date ?? "9999-12-31") >= range.start;
-  if (isDemoMode()) return (fixture.adCampaigns as AdCampaign[]).filter(overlaps);
+  if (isDemoMode()) return (own((await demo()).adCampaigns, clientId) as AdCampaign[]).filter(overlaps);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ad_campaigns")
@@ -277,7 +281,7 @@ export async function getAdCampaigns(clientId: string, range: DateRange): Promis
 
 /** Commentary for a month. RLS hides drafts from client users. */
 export async function getCommentary(clientId: string, month: string): Promise<Commentary | null> {
-  if (isDemoMode()) return (fixture.commentary.find((c) => c.month === month) as Commentary | undefined) ?? null;
+  if (isDemoMode()) return (own((await demo()).commentary, clientId).find((c) => c.month === month) as Commentary | undefined) ?? null;
   const supabase = await createClient();
   const { data } = await supabase
     .from("monthly_commentary")
@@ -291,7 +295,7 @@ export async function getCommentary(clientId: string, month: string): Promise<Co
 /** Most recent month with published commentary, if any. */
 export async function getLatestPublishedMonth(clientId: string): Promise<string | null> {
   if (isDemoMode()) {
-    return fixture.commentary.filter((c) => c.status === "published").map((c) => c.month).sort().at(-1) ?? null;
+    return own((await demo()).commentary, clientId).filter((c) => c.status === "published").map((c) => c.month).sort().at(-1) ?? null;
   }
   const supabase = await createClient();
   const { data } = await supabase
@@ -306,7 +310,7 @@ export async function getLatestPublishedMonth(clientId: string): Promise<string 
 }
 
 export async function getAnnotations(clientId: string, range: DateRange): Promise<Annotation[]> {
-  if (isDemoMode()) return fixture.annotations.filter((a) => a.date >= range.start && a.date <= range.end);
+  if (isDemoMode()) return own((await demo()).annotations, clientId).filter((a) => a.date >= range.start && a.date <= range.end);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("annotations")

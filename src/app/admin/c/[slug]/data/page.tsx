@@ -95,7 +95,7 @@ async function DataPageContent(props: PageProps<"/admin/c/[slug]/data">) {
 
         <div className="mt-8">
           {tab === "upload" && <UploadPanel slug={client.slug} clientName={client.name} sources={sources} />}
-          {tab === "screenshots" && <ScreenshotPanel slug={client.slug} clientName={client.name} configured={screenshotReadingConfigured()} />}
+          {tab === "screenshots" && <ScreenshotPanel slug={client.slug} clientName={client.name} configured={screenshotReadingConfigured()} enabled={client.enabled_sources} />}
           {tab === "manual" && (
             <ManualEntry
               slug={client.slug}

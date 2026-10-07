@@ -10,9 +10,11 @@ const JULY = { start: "2026-07-01", end: "2026-07-31" };
 const JUNE = { start: "2026-06-01", end: "2026-06-30" };
 const CAMPAIGN = { start: "2026-07-14", end: "2026-08-06" };
 
+const WIELER = fixture.clients.find((c) => c.slug === "wieler-roofing")!.id;
+const mine = <T extends { client_id: string }>(rows: T[]) => rows.filter((r) => r.client_id === WIELER);
 const resolver = new MetricResolver({
-  daily: [...(fixture.metricsDaily as DailyRow[]), ...adRowsToDaily(fixture.adMetricsDaily)],
-  period: fixture.metricsPeriod,
+  daily: [...(mine(fixture.metricsDaily) as DailyRow[]), ...adRowsToDaily(mine(fixture.adMetricsDaily))],
+  period: mine(fixture.metricsPeriod),
 });
 const v = (key: string, range = JULY) => resolver.resolve(key, range).value;
 
@@ -179,5 +181,23 @@ describe("period totals from monthly exports", () => {
   it("reads point-in-time metrics from the end of a period", () => {
     expect(r.resolve("fb_followers", july).value).toBe(55);
     expect(r.resolve("fb_followers", { start: "2026-07-01", end: "2026-08-31" }).value).toBe(60);
+  });
+});
+
+describe("per-client channels", () => {
+  it("leaves channels a client does not have out of combined totals", async () => {
+    const { onlyEnabledSources } = await import("./aggregate");
+    const data = {
+      daily: [
+        { metric_key: "fb_views", date: "2026-07-01", value: 100 },
+        { metric_key: "ig_views", date: "2026-07-01", value: 50 },
+        { metric_key: "ads_spend", date: "2026-07-01", value: 20 },
+      ],
+      period: [],
+    };
+    const r = new MetricResolver(onlyEnabledSources(data, new Set(["meta_facebook", "ga4"])));
+    const day = { start: "2026-07-01", end: "2026-07-01" };
+    expect(r.resolve("total_audience_reach", day).value).toBe(100);
+    expect(r.resolve("ads_spend", day).value).toBeNull();
   });
 });

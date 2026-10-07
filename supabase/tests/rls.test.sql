@@ -180,6 +180,43 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- A viewer linked to two clients sees both; archiving one hides it
+-- ---------------------------------------------------------------------------
+
+insert into public.user_clients (user_id, client_id)
+values ('00000000-0000-4000-a000-0000000000b1', '00000000-0000-4000-b000-00000000000a');
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-0000000000b1","role":"authenticated"}', true);
+do $$
+begin
+  if (select count(*) from public.clients where name like 'RLS Client %') <> 2 then
+    raise exception 'FAIL: a viewer linked to two clients must see both';
+  end if;
+end $$;
+reset role;
+
+update public.clients set archived_at = now() where id = '00000000-0000-4000-b000-00000000000a';
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-0000000000b1","role":"authenticated"}', true);
+do $$
+begin
+  if exists (select 1 from public.clients where id = '00000000-0000-4000-b000-00000000000a')
+     or exists (select 1 from public.metrics_daily where client_id = '00000000-0000-4000-b000-00000000000a') then
+    raise exception 'FAIL: an archived client is still visible to its logins';
+  end if;
+  if not exists (select 1 from public.clients where id = '00000000-0000-4000-b000-00000000000b') then
+    raise exception 'FAIL: archiving one client hid another';
+  end if;
+end $$;
+reset role;
+
+update public.clients set archived_at = null where id = '00000000-0000-4000-b000-00000000000a';
+delete from public.user_clients
+ where user_id = '00000000-0000-4000-a000-0000000000b1' and client_id = '00000000-0000-4000-b000-00000000000a';
+
+-- ---------------------------------------------------------------------------
 -- Unlinked user and anonymous visitors see nothing
 -- ---------------------------------------------------------------------------
 
@@ -232,6 +269,18 @@ begin
   update public.users set role = 'ffm_admin' where id = '00000000-0000-4000-a000-0000000000c1';
   if (select role from public.users where id = '00000000-0000-4000-a000-0000000000c1') <> 'ffm_staff' then
     raise exception 'FAIL: staff escalated their own role';
+  end if;
+
+  begin
+    insert into public.user_clients (user_id, client_id)
+    values ('00000000-0000-4000-a000-0000000000e1', '00000000-0000-4000-b000-00000000000a');
+    raise exception 'FAIL: staff gave a login access to a client';
+  exception when insufficient_privilege then null;
+  end;
+
+  update public.clients set enabled_sources = '{tiktok}' where id = '00000000-0000-4000-b000-00000000000a';
+  if (select enabled_sources from public.clients where id = '00000000-0000-4000-b000-00000000000a') <> '{ga4}' then
+    raise exception 'FAIL: staff changed a client''s channels';
   end if;
 end $$;
 reset role;

@@ -81,6 +81,9 @@ export async function readScreenshotUpload(slug: string, _prev: ScreenshotReadSt
   }
   const platform = readPlatform(form.get("platform"));
   if (!platform) return { status: "error", message: "Choose which platform the screenshots are from." };
+  if (!auth.client.enabled_sources.includes(platform)) {
+    return { status: "error", message: `${auth.client.name} does not have this channel turned on. Turn it on in the client's Settings first.` };
+  }
   const entered = readPeriod(form);
   if (entered === "invalid") return { status: "error", message: "Enter a valid start and end date, with the end on or after the start." };
   const imgs = await readImages(form);
@@ -142,6 +145,9 @@ export async function saveScreenshotUpload(
   if ("error" in auth) return { status: "error", message: auth.error };
   const reviewed = parseReviewed(String(form.get("reviewed") ?? ""));
   if (!reviewed) return { status: "error", message: "The reviewed values could not be read. Read the screenshots again." };
+  if (!auth.client.enabled_sources.includes(reviewed.platform)) {
+    return { status: "error", message: `${auth.client.name} does not have this channel turned on.` };
+  }
   const result = buildScreenshotResult(reviewed);
   if (!result.ok) return { status: "error", message: result.errors.join(" ") };
   const imgs = await readImages(form);

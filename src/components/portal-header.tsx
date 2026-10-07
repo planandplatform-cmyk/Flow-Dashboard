@@ -37,6 +37,11 @@ export function PortalHeader({ client, viewer }: { client?: Client; viewer: View
               Manage data
             </Link>
           )}
+          {client && viewer.role === "ffm_admin" && (
+            <Link href={`/admin/c/${client.slug}/settings`} className="hidden rounded-md px-3 py-2 text-fg-secondary transition hover:bg-raised hover:text-fg sm:block">
+              Settings
+            </Link>
+          )}
           <Link href="/glossary" className="rounded-md px-3 py-2 text-fg-secondary transition hover:bg-raised hover:text-fg">
             Glossary
           </Link>
