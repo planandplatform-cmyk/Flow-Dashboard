@@ -83,22 +83,41 @@ export async function GET(request: NextRequest) {
   });
 }
 
+/** The address the visitor actually used (Vercel sits behind a proxy). */
+function siteBase(request: NextRequest): { base: string; host: string } {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
+  const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+  return { base: `${proto}://${host}`, host };
+}
+
+function fail(base: string, reason: string, detail?: string) {
+  // Logged so the exact cause shows in Vercel's logs; never includes the token.
+  console.error(`[auth/confirm] sign-in failed: ${reason}${detail ? ` (${detail})` : ""}`);
+  return NextResponse.redirect(new URL(`/login?error=link&reason=${encodeURIComponent(reason)}`, base), { status: 303 });
+}
+
 export async function POST(request: NextRequest) {
-  const { origin } = request.nextUrl;
+  const { base, host } = siteBase(request);
   // Only accept the form from this site's own "Continue" page.
   const from = request.headers.get("origin");
-  if (from && from !== origin) {
-    return NextResponse.redirect(new URL("/login?error=link", origin), { status: 303 });
+  if (from && from !== "null") {
+    let fromHost = "";
+    try {
+      fromHost = new URL(from).host;
+    } catch {
+      /* treated as a mismatch */
+    }
+    if (fromHost !== host) return fail(base, "cross_site", `origin ${from}, host ${host}`);
   }
+
   const form = await request.formData();
   const tokenHash = String(form.get("token_hash") ?? "");
   const type = String(form.get("type") ?? "") as EmailOtpType;
   const next = safeNext(String(form.get("next") ?? "/"));
+  if (!tokenHash || !OTP_TYPES.includes(type)) return fail(base, "bad_link");
 
-  if (!tokenHash || !OTP_TYPES.includes(type)) {
-    return NextResponse.redirect(new URL("/login?error=link", origin), { status: 303 });
-  }
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-  return NextResponse.redirect(new URL(error ? "/login?error=link" : next, origin), { status: 303 });
+  if (error) return fail(base, error.code ?? "verify_failed", `${error.status ?? ""} ${error.message}`.trim());
+  return NextResponse.redirect(new URL(next, base), { status: 303 });
 }

@@ -38,13 +38,17 @@ async function LoginBody({ searchParams }: { searchParams: PageProps<"/login">["
   const params = await searchParams;
   const next = typeof params.next === "string" ? params.next : undefined;
   const linkError = params.error === "link";
+  const reason = typeof params.reason === "string" ? params.reason : "";
   const demo = isDemoMode();
 
   return (
     <>
       {linkError && (
         <p className="mt-6 rounded-lg border border-negative/40 bg-negative/10 p-3 text-sm text-negative" role="alert">
-          That sign-in link has expired or was already used. Request a new one below.
+          {reason === "cross_site"
+            ? "Open the link directly from the email, then press the button on the page that opens."
+            : "That sign-in link has expired or was already used. Request a new one below, and use only the newest email."}
+          {reason && reason !== "cross_site" && <span className="mt-1 block text-xs opacity-70">Reason: {reason}</span>}
         </p>
       )}
       {demo && (
