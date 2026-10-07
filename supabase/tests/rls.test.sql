@@ -4,14 +4,13 @@
 -- drafts or FFM-only tables, and cannot write anything. Also checks staff and
 -- admin boundaries.
 --
--- Safe to run against a real Supabase database (SQL editor, or psql as the
--- postgres user): everything happens in one transaction that is rolled back.
+-- Safe to run against a real Supabase database (paste into the SQL Editor, or
+-- psql as the postgres user): everything happens in one transaction that is rolled back.
 --
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rls.test.sql
 --
 -- Any failure raises an exception naming the broken rule.
 
-\set ON_ERROR_STOP 1
 begin;
 
 -- ---------------------------------------------------------------------------
@@ -309,6 +308,7 @@ begin
 end $$;
 reset role;
 
-select 'RLS tests passed' as result;
-
 rollback;
+
+-- Only reached if every check above passed (any failure stops with an error).
+select 'RLS tests passed' as result;

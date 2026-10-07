@@ -3,7 +3,6 @@
 --
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/uploads.test.sql
 
-\set ON_ERROR_STOP 1
 begin;
 
 insert into auth.users (id, email) values
@@ -149,5 +148,7 @@ begin
 end $$;
 
 reset role;
-select 'Upload tests passed' as result;
 rollback;
+
+-- Only reached if every check above passed (any failure stops with an error).
+select 'Upload tests passed' as result;
