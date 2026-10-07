@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "4.4mb" },
   },
   partialPrefetching: true,
+  // The PDF export reads its fonts and logos from disk; make sure Vercel ships them.
+  outputFileTracingIncludes: {
+    "/c/\\[slug\\]/pdf": ["./src/lib/pdf/assets/**/*"],
+  },
   turbopack: {
     rules: {
       "*.css": {

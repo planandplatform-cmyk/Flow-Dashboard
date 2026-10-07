@@ -15,7 +15,8 @@ magic-link auth, row-level security), deployed on Vercel.
 | `src/lib/metrics/glossary.ts` | Key Terms glossary from the monthly report. |
 | `src/lib/data/portal.ts` | All data reads. Queries run as the signed-in user, so RLS decides what comes back. |
 | `src/app/c/[slug]` | Client report page, laid out like the monthly PDF, with date range, comparison and 12-month trend charts. |
-| `src/lib/report` | Date range and comparison rules (`period.ts`) and monthly trend series (`trends.ts`). |
+| `src/lib/report` | Date range and comparison rules (`period.ts`), monthly trend series (`trends.ts`), and `load.ts`, which computes everything the report shows; the page and the PDF both render from it. |
+| `src/lib/pdf` | PDF export: A4 layout (`report-pdf.tsx`), dark and print themes (`theme.ts`), fonts and logos (`assets/`). Served at `/c/<client>/pdf`. |
 | `src/app/admin/c/[slug]/commentary` | Commentary editor with **Draft with AI**. The fact sheet the AI writes from is built in `src/lib/commentary/facts.ts`; the voice and rules are in `drafter.ts`. |
 | `src/app/admin/c/[slug]/events` | Timeline events, shown as markers on every chart. |
 | `src/app/admin/c/[slug]/activity` | Activity log: uploads, syncs, publishes and settings changes, from the append-only audit log. |
@@ -133,6 +134,18 @@ before, quarter to date with the previous quarter to the same day, and day range
 number of days. Monthly commentary shows when the view is exactly one calendar month. Trend
 charts cover the 12 months ending with the selected range, with the year before dashed and
 annotated events marked.
+
+## PDF export
+
+The **PDF** button on any report downloads the current view (same dates, same comparison) as an
+A4 PDF in the monthly report style: logo and client name on every page, numbered sections, KPI
+cards with changes, tables, audience bars, trend charts, and a footer with page numbers.
+
+- **Download PDF**: dark, as on screen.
+- **Print-friendly PDF**: white background with charcoal text, for printing.
+
+Only published commentary goes into a PDF. The link can also be built by hand:
+`/c/wieler-roofing/pdf?month=2026-07` or `...&theme=print`, with any of the report URL options.
 
 ## Monthly commentary
 

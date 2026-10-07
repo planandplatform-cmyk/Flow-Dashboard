@@ -78,7 +78,7 @@ export function PeriodPicker(props: PeriodPickerProps) {
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-fg-secondary transition hover:border-line-focus hover:text-fg";
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative min-w-0 flex-1 sm:flex-none">
       <div className="flex items-center gap-2">
         {props.prevMonth && (
           <button
