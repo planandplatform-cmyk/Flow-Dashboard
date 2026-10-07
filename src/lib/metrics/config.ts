@@ -1,0 +1,663 @@
+/**
+ * Every metric the portal knows about. This is the single source of truth for
+ * display names, tooltip definitions, formatting, and how each metric rolls up
+ * over a date range. Parsers, connectors, and the dashboard all reference
+ * metrics by these keys.
+ *
+ * Copy rule: definitions are client-facing. Plain language, no em dashes.
+ */
+import type { Aggregation, MetricDefinition } from "./types";
+
+const sum: Aggregation = { type: "sum" };
+const last: Aggregation = { type: "last" };
+const unique: Aggregation = { type: "unique" };
+const ratio = (numerator: string, denominator: string): Aggregation => ({
+  type: "ratio",
+  numerator,
+  denominator,
+});
+
+const definitions: MetricDefinition[] = [
+  // -------------------------------------------------------------------------
+  // Website (GA4)
+  // -------------------------------------------------------------------------
+  {
+    key: "ga4_sessions",
+    source: "ga4",
+    label: "Sessions",
+    definition: "The number of visits to your website. One person can visit more than once.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["channel", "landing_page"],
+  },
+  {
+    key: "ga4_engaged_sessions",
+    source: "ga4",
+    label: "Engaged Sessions",
+    definition:
+      "Visits where the person stayed at least 10 seconds, viewed more than one page, or completed a key action.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["channel", "landing_page"],
+  },
+  {
+    key: "ga4_engagement_rate",
+    source: "ga4",
+    label: "Engagement Rate",
+    definition:
+      "The share of website visits that were engaged. A high rate means visitors are finding what they came for.",
+    format: "percent",
+    aggregation: ratio("ga4_engaged_sessions", "ga4_sessions"),
+    upIsGood: true,
+    dimensions: ["channel", "landing_page"],
+    glossaryTerm: "engagement_rate",
+  },
+  {
+    key: "ga4_key_events",
+    source: "ga4",
+    label: "Key Events",
+    definition:
+      "Important actions taken on your website, like submitting a form, calling, or booking. These are the visits most likely to become customers.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["channel", "landing_page"],
+  },
+  {
+    key: "ga4_users",
+    source: "ga4",
+    label: "Visitors",
+    definition: "The number of different people who visited your website.",
+    format: "number",
+    aggregation: unique,
+    upIsGood: true,
+  },
+  {
+    key: "ga4_page_views",
+    source: "ga4",
+    label: "Page Views",
+    definition: "The total number of pages viewed on your website.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["landing_page"],
+  },
+
+  // -------------------------------------------------------------------------
+  // Facebook
+  // -------------------------------------------------------------------------
+  {
+    key: "fb_followers",
+    source: "meta_facebook",
+    label: "Followers",
+    definition: "People who follow your Facebook Page and can see your updates in their feed.",
+    format: "number",
+    aggregation: last,
+    upIsGood: true,
+    glossaryTerm: "followers",
+  },
+  {
+    key: "fb_net_new_followers",
+    source: "meta_facebook",
+    label: "Net New Followers",
+    definition: "New Facebook followers gained, minus people who unfollowed.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "net_new_followers",
+  },
+  {
+    key: "fb_views",
+    source: "meta_facebook",
+    label: "Views",
+    definition: "The number of times your Facebook Page and posts were seen.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "reach_views",
+  },
+  {
+    key: "fb_reach",
+    source: "meta_facebook",
+    label: "Reach",
+    definition: "The number of different people who saw your Facebook content.",
+    format: "number",
+    aggregation: unique,
+    upIsGood: true,
+    glossaryTerm: "reach_views",
+  },
+  {
+    key: "fb_interactions",
+    source: "meta_facebook",
+    label: "Engagements",
+    definition: "Reactions, comments, shares, and clicks on your Facebook content.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "content_interactions",
+  },
+  {
+    key: "fb_reactions",
+    source: "meta_facebook",
+    label: "Reactions",
+    definition: "Likes, loves, and other reactions on your Facebook posts.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "fb_page_visits",
+    source: "meta_facebook",
+    label: "Page Visits",
+    definition: "The number of times people opened your Facebook Page.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "profile_visits",
+  },
+  {
+    key: "fb_engagement_rate",
+    source: "meta_facebook",
+    label: "Engagement Rate",
+    definition: "Engagements as a share of views on Facebook.",
+    format: "percent",
+    aggregation: ratio("fb_interactions", "fb_views"),
+    upIsGood: true,
+    glossaryTerm: "engagement_rate",
+  },
+  {
+    key: "fb_reels_views",
+    source: "meta_facebook",
+    label: "Reels Views",
+    definition: "The number of times your Facebook Reels were watched.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "fb_reels_interactions",
+    source: "meta_facebook",
+    label: "Reels Engagements",
+    definition: "Reactions, comments, and shares on your Facebook Reels.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+
+  {
+    key: "fb_reels_engagement_share",
+    source: "meta_facebook",
+    label: "Reels Engagement Share",
+    definition: "The share of all your Facebook engagement that came from Reels.",
+    format: "percent",
+    aggregation: ratio("fb_reels_interactions", "fb_interactions"),
+    upIsGood: true,
+  },
+
+  // -------------------------------------------------------------------------
+  // Instagram
+  // -------------------------------------------------------------------------
+  {
+    key: "ig_followers",
+    source: "meta_instagram",
+    label: "Followers",
+    definition: "People who follow your Instagram account.",
+    format: "number",
+    aggregation: last,
+    upIsGood: true,
+    glossaryTerm: "followers",
+  },
+  {
+    key: "ig_net_new_followers",
+    source: "meta_instagram",
+    label: "Net New Followers",
+    definition: "New Instagram followers gained, minus people who unfollowed.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "net_new_followers",
+  },
+  {
+    key: "ig_views",
+    source: "meta_instagram",
+    label: "Views",
+    definition: "The number of times your Instagram posts, Reels, and stories were seen.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "reach_views",
+  },
+  {
+    key: "ig_reach",
+    source: "meta_instagram",
+    label: "Reach",
+    definition: "The number of different people who saw your Instagram content.",
+    format: "number",
+    aggregation: unique,
+    upIsGood: true,
+    glossaryTerm: "reach_views",
+  },
+  {
+    key: "ig_interactions",
+    source: "meta_instagram",
+    label: "Interactions",
+    definition: "Likes, comments, shares, and saves on your Instagram content.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "content_interactions",
+  },
+  {
+    key: "ig_profile_visits",
+    source: "meta_instagram",
+    label: "Profile Visits",
+    definition: "The number of times people opened your Instagram profile.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "profile_visits",
+  },
+  {
+    key: "ig_engagement_rate",
+    source: "meta_instagram",
+    label: "Engagement Rate",
+    definition: "Interactions as a share of views on Instagram.",
+    format: "percent",
+    aggregation: ratio("ig_interactions", "ig_views"),
+    upIsGood: true,
+    glossaryTerm: "engagement_rate",
+  },
+  {
+    key: "ig_reels_views",
+    source: "meta_instagram",
+    label: "Reels Views",
+    definition: "The number of times your Instagram Reels were watched.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "ig_reels_interactions",
+    source: "meta_instagram",
+    label: "Reels Interactions",
+    definition: "Likes, comments, shares, and saves on your Instagram Reels.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "ig_post_views",
+    source: "meta_instagram",
+    label: "Post Views",
+    definition: "The number of times your Instagram photo and carousel posts were seen.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+
+  // -------------------------------------------------------------------------
+  // Meta Ads (rolled up from ad_metrics_daily; reach from metrics_period)
+  // -------------------------------------------------------------------------
+  {
+    key: "ads_leads",
+    source: "meta_ads",
+    label: "Leads",
+    definition: "People who filled out your lead form after seeing your ad.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "ads_spend",
+    source: "meta_ads",
+    label: "Amount Spent",
+    definition: "The total amount spent on your ads.",
+    format: "currency",
+    aggregation: sum,
+    upIsGood: false,
+  },
+  {
+    key: "ads_reach",
+    source: "meta_ads",
+    label: "Reach",
+    definition: "The number of different people who saw your ads at least once.",
+    format: "number",
+    aggregation: unique,
+    upIsGood: true,
+  },
+  {
+    key: "ads_impressions",
+    source: "meta_ads",
+    label: "Impressions",
+    definition: "The total number of times your ads were shown.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "ads_clicks",
+    source: "meta_ads",
+    label: "Clicks",
+    definition: "The number of times people clicked your ads.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "ads_frequency",
+    source: "meta_ads",
+    label: "Frequency",
+    definition: "How many times, on average, each person saw your ads.",
+    format: "multiplier",
+    aggregation: ratio("ads_impressions", "ads_reach"),
+    upIsGood: true,
+  },
+  {
+    key: "ads_ctr",
+    source: "meta_ads",
+    label: "Click-Through Rate",
+    definition: "The share of ad views that led to a click.",
+    format: "percent",
+    aggregation: ratio("ads_clicks", "ads_impressions"),
+    upIsGood: true,
+  },
+  {
+    key: "ads_cpl",
+    source: "meta_ads",
+    label: "Cost Per Lead",
+    definition: "The average cost for each lead your ads generated.",
+    format: "currency",
+    aggregation: ratio("ads_spend", "ads_leads"),
+    upIsGood: false,
+  },
+  {
+    key: "ads_cpc",
+    source: "meta_ads",
+    label: "Cost Per Click",
+    definition: "The average cost for each click on your ads.",
+    format: "currency",
+    aggregation: ratio("ads_spend", "ads_clicks"),
+    upIsGood: false,
+  },
+
+  // -------------------------------------------------------------------------
+  // Shopify
+  // -------------------------------------------------------------------------
+  {
+    key: "shop_total_sales",
+    source: "shopify",
+    label: "Total Sales",
+    definition: "Revenue from orders, after discounts and returns.",
+    format: "currency",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["channel", "product"],
+  },
+  {
+    key: "shop_orders",
+    source: "shopify",
+    label: "Orders",
+    definition: "The number of orders placed in your store.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["channel", "product"],
+  },
+  {
+    key: "shop_aov",
+    source: "shopify",
+    label: "Average Order Value",
+    definition: "How much a customer spends per order on average.",
+    format: "currency",
+    aggregation: ratio("shop_total_sales", "shop_orders"),
+    upIsGood: true,
+    dimensions: ["channel"],
+  },
+  {
+    key: "shop_sessions",
+    source: "shopify",
+    label: "Store Sessions",
+    definition: "The number of visits to your online store.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+  },
+  {
+    key: "shop_conversion_rate",
+    source: "shopify",
+    label: "Conversion Rate",
+    definition: "The share of store visits that ended in an order.",
+    format: "percent",
+    aggregation: ratio("shop_orders", "shop_sessions"),
+    upIsGood: true,
+  },
+  {
+    key: "shop_customers",
+    source: "shopify",
+    label: "Customers",
+    definition: "The number of different customers who placed an order.",
+    format: "number",
+    aggregation: unique,
+    upIsGood: true,
+  },
+  {
+    key: "shop_returning_customers",
+    source: "shopify",
+    label: "Returning Customers",
+    definition: "Customers who had ordered from you before.",
+    format: "number",
+    aggregation: unique,
+    upIsGood: true,
+  },
+  {
+    key: "shop_returning_customer_rate",
+    source: "shopify",
+    label: "Returning Customer Rate",
+    definition: "The share of customers who had ordered from you before.",
+    format: "percent",
+    aggregation: ratio("shop_returning_customers", "shop_customers"),
+    upIsGood: true,
+  },
+
+  // -------------------------------------------------------------------------
+  // TikTok
+  // -------------------------------------------------------------------------
+  {
+    key: "tt_followers",
+    source: "tiktok",
+    label: "Followers",
+    definition: "People who follow your TikTok account.",
+    format: "number",
+    aggregation: last,
+    upIsGood: true,
+    glossaryTerm: "followers",
+  },
+  {
+    key: "tt_net_new_followers",
+    source: "tiktok",
+    label: "Net New Followers",
+    definition: "New TikTok followers gained, minus people who unfollowed.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "net_new_followers",
+  },
+  {
+    key: "tt_views",
+    source: "tiktok",
+    label: "Video Views",
+    definition: "The number of times your TikTok videos were watched.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "reach_views",
+  },
+  {
+    key: "tt_interactions",
+    source: "tiktok",
+    label: "Interactions",
+    definition: "Likes, comments, and shares on your TikTok videos.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "content_interactions",
+  },
+  {
+    key: "tt_profile_views",
+    source: "tiktok",
+    label: "Profile Views",
+    definition: "The number of times people opened your TikTok profile.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "profile_visits",
+  },
+  {
+    key: "tt_engagement_rate",
+    source: "tiktok",
+    label: "Engagement Rate",
+    definition: "Interactions as a share of video views on TikTok.",
+    format: "percent",
+    aggregation: ratio("tt_interactions", "tt_views"),
+    upIsGood: true,
+    glossaryTerm: "engagement_rate",
+  },
+
+  // -------------------------------------------------------------------------
+  // LinkedIn
+  // -------------------------------------------------------------------------
+  {
+    key: "li_followers",
+    source: "linkedin",
+    label: "Followers",
+    definition: "People who follow your LinkedIn company page.",
+    format: "number",
+    aggregation: last,
+    upIsGood: true,
+    glossaryTerm: "followers",
+  },
+  {
+    key: "li_net_new_followers",
+    source: "linkedin",
+    label: "Net New Followers",
+    definition: "New LinkedIn followers gained, minus people who unfollowed.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "net_new_followers",
+  },
+  {
+    key: "li_impressions",
+    source: "linkedin",
+    label: "Impressions",
+    definition: "The number of times your LinkedIn posts were seen.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "reach_views",
+  },
+  {
+    key: "li_interactions",
+    source: "linkedin",
+    label: "Interactions",
+    definition: "Reactions, comments, reposts, and clicks on your LinkedIn posts.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "content_interactions",
+  },
+  {
+    key: "li_page_views",
+    source: "linkedin",
+    label: "Page Views",
+    definition: "The number of times people opened your LinkedIn company page.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    glossaryTerm: "profile_visits",
+  },
+  {
+    key: "li_engagement_rate",
+    source: "linkedin",
+    label: "Engagement Rate",
+    definition: "Interactions as a share of impressions on LinkedIn.",
+    format: "percent",
+    aggregation: ratio("li_interactions", "li_impressions"),
+    upIsGood: true,
+    glossaryTerm: "engagement_rate",
+  },
+
+  // -------------------------------------------------------------------------
+  // Combined (executive summary hero tiles)
+  // -------------------------------------------------------------------------
+  {
+    key: "total_audience_reach",
+    source: "combined",
+    label: "Total Audience Reach",
+    definition: "Views across all of your social media platforms combined.",
+    format: "number",
+    aggregation: { type: "derived_sum", of: ["fb_views", "ig_views", "tt_views", "li_impressions"] },
+    upIsGood: true,
+    glossaryTerm: "reach_views",
+  },
+  {
+    key: "total_interactions",
+    source: "combined",
+    label: "Total Interactions",
+    definition: "Likes, comments, shares, saves, and clicks across all of your social media platforms.",
+    format: "number",
+    aggregation: {
+      type: "derived_sum",
+      of: ["fb_interactions", "ig_interactions", "tt_interactions", "li_interactions"],
+    },
+    upIsGood: true,
+    glossaryTerm: "content_interactions",
+  },
+  {
+    key: "total_followers",
+    source: "combined",
+    label: "Total Audience",
+    definition: "Followers across all of your social media platforms combined.",
+    format: "number",
+    aggregation: { type: "derived_sum", of: ["fb_followers", "ig_followers", "tt_followers", "li_followers"] },
+    upIsGood: true,
+    glossaryTerm: "followers",
+  },
+  {
+    key: "total_net_new_followers",
+    source: "combined",
+    label: "Net New Followers",
+    definition: "New followers gained across all platforms, minus people who unfollowed.",
+    format: "number",
+    aggregation: {
+      type: "derived_sum",
+      of: ["fb_net_new_followers", "ig_net_new_followers", "tt_net_new_followers", "li_net_new_followers"],
+    },
+    upIsGood: true,
+    glossaryTerm: "net_new_followers",
+  },
+];
+
+export const METRICS: Readonly<Record<string, MetricDefinition>> = Object.freeze(
+  Object.fromEntries(definitions.map((d) => [d.key, d])),
+);
+
+export function getMetric(key: string): MetricDefinition {
+  const def = METRICS[key];
+  if (!def) throw new Error(`Unknown metric key: ${key}`);
+  return def;
+}
+
+export function isMetricKey(key: string): boolean {
+  return key in METRICS;
+}
+
+/** Per-platform keys used by the Social Media Overview table. */
+export const SOCIAL_OVERVIEW_KEYS = {
+  meta_facebook: { followers: "fb_followers", netNew: "fb_net_new_followers", views: "fb_views", interactions: "fb_interactions" },
+  meta_instagram: { followers: "ig_followers", netNew: "ig_net_new_followers", views: "ig_views", interactions: "ig_interactions" },
+  tiktok: { followers: "tt_followers", netNew: "tt_net_new_followers", views: "tt_views", interactions: "tt_interactions" },
+  linkedin: { followers: "li_followers", netNew: "li_net_new_followers", views: "li_impressions", interactions: "li_interactions" },
+} as const;

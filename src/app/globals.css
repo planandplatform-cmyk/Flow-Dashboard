@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/*
+ * Flow Forward Media design tokens. Components use these names only
+ * (bg-surface, text-teal, border-line...), never raw hex values.
+ */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Backgrounds */
+  --color-page: #000000;
+  --color-shell: #0a0a0a;
+  --color-surface: #111111;
+  --color-raised: #1a1a1a;
+
+  /* Lines */
+  --color-line: #262626;
+  --color-grid: #1f1f1f;
+  --color-line-focus: rgb(49 228 228 / 0.2);
+
+  /* Text. Muted is #858585 rather than #6B6B6B so it passes WCAG AA (4.5:1)
+     on every surface, including #1A1A1A. */
+  --color-fg: #ffffff;
+  --color-fg-secondary: #a3a3a3;
+  --color-fg-muted: #858585;
+
+  /* Teal scale built from the logo teal #31E4E4 */
+  --color-teal-100: #c9f8f8;
+  --color-teal-200: #8cf0f0;
+  --color-teal: #31e4e4;
+  --color-teal-500: #1fc4c4;
+  --color-teal-600: #0fa3a3;
+  --color-teal-700: #0c8888;
+  --color-teal-800: #0a6e6e;
+  --color-teal-900: #073f3f;
+  --color-teal-950: #042424;
+
+  /* Change indicators. Teal is good news; coral is bad news. No green. */
+  --color-positive: #31e4e4;
+  --color-negative: #ff7b6e;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-fg);
+}
+
+::selection {
+  background: var(--color-teal-800);
+  color: var(--color-fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
