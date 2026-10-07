@@ -9,3 +9,12 @@ export async function authorizeStaffForClient(slug: string): Promise<{ client: C
   if (!client) return { error: "Client not found." };
   return { client };
 }
+
+/** Record an FFM action in the append-only audit log (RLS checks actor = signed-in user). */
+export async function auditAction(clientId: string | null, action: string, details: Record<string, unknown>) {
+  const { createClient } = await import("@/lib/supabase/server");
+  const viewer = await getViewer();
+  if (!viewer || viewer.demo) return;
+  const supabase = await createClient();
+  await supabase.from("audit_log").insert({ actor_id: viewer.id, client_id: clientId, action, details });
+}

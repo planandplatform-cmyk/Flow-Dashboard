@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Notice } from "@/components/form";
+import { AdminClientTop } from "@/components/admin-client-top";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
 import { getAdminViewer, getClientSettings, listClientMembers } from "@/lib/data/admin";
@@ -35,20 +35,7 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
     <>
       <PortalHeader client={client as unknown as Client} viewer={viewer} />
       <main className="mx-auto max-w-3xl space-y-12 px-4 pb-24 pt-8 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-fg-muted">Client settings</p>
-            <h1 className="mt-1 border-l-4 border-teal pl-4 text-2xl font-semibold tracking-tight sm:text-3xl">{client.name}</h1>
-          </div>
-          <div className="flex gap-2 text-sm">
-            <Link href={`/c/${client.slug}`} className="rounded-lg border border-line bg-surface px-3 py-2 text-fg-secondary hover:border-line-focus hover:text-fg">
-              Report
-            </Link>
-            <Link href={`/admin/c/${client.slug}/data`} className="rounded-lg border border-line bg-surface px-3 py-2 text-fg-secondary hover:border-line-focus hover:text-fg">
-              Manage data
-            </Link>
-          </div>
-        </div>
+        <AdminClientTop slug={client.slug} name={client.name} active="settings" admin eyebrow="Client settings" />
 
         {search.created === "1" && <Notice tone="success">Client created. Next, invite the people who should see this report.</Notice>}
         {client.archived_at && <Notice tone="warning">This client is archived. Its logins see nothing until it is restored.</Notice>}

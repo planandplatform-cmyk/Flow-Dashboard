@@ -16,6 +16,9 @@ magic-link auth, row-level security), deployed on Vercel.
 | `src/lib/data/portal.ts` | All data reads. Queries run as the signed-in user, so RLS decides what comes back. |
 | `src/app/c/[slug]` | Client report page, laid out like the monthly PDF, with date range, comparison and 12-month trend charts. |
 | `src/lib/report` | Date range and comparison rules (`period.ts`) and monthly trend series (`trends.ts`). |
+| `src/app/admin/c/[slug]/commentary` | Commentary editor with **Draft with AI**. The fact sheet the AI writes from is built in `src/lib/commentary/facts.ts`; the voice and rules are in `drafter.ts`. |
+| `src/app/admin/c/[slug]/events` | Timeline events, shown as markers on every chart. |
+| `src/app/admin/c/[slug]/activity` | Activity log: uploads, syncs, publishes and settings changes, from the append-only audit log. |
 | `src/app/admin/c/[slug]/data` | FFM-only data page: file upload with preview, manual entry, upload history with rollback. |
 | `src/lib/ingest` | File reading and one parser per platform export, plus AI reading of screenshots and PDFs (`screenshot.ts`, `screenshot-reader.ts`). See [docs/uploading-data.md](docs/uploading-data.md). |
 | `supabase/migrations` | Schema and row-level security. |
@@ -130,6 +133,25 @@ before, quarter to date with the previous quarter to the same day, and day range
 number of days. Monthly commentary shows when the view is exactly one calendar month. Trend
 charts cover the 12 months ending with the selected range, with the year before dashed and
 annotated events marked.
+
+## Monthly commentary
+
+**Commentary** on a client (or from the client list) opens the editor for a month.
+
+1. **Draft with AI** writes a headline, summary, a paragraph per channel, section notes, a
+   conclusion and a recap email, from that month's numbers against the month before. It only
+   uses the numbers shown in the panel on the right, keeps paid and organic apart, and follows
+   the house rules: factual, no recommendations, no hype, no em dashes. Nothing is saved yet.
+2. Edit anything. **Save draft** keeps it private to FFM; **Publish** shows it to the client.
+   Published commentary can be updated or unpublished.
+3. Copy the recap email into your email client. The portal never sends it.
+
+Each draft costs a few cents and needs `ANTHROPIC_API_KEY`. Em dashes typed by hand are replaced
+with commas on save. Every save, publish, AI draft, event change and upload is recorded in the
+client's **Activity** log, which nobody can edit or delete.
+
+The client list shows each client's health: how fresh the data is (flagged after 35 days), whether
+last month's commentary is published, and failed syncs once connectors are running.
 
 ## Roles
 

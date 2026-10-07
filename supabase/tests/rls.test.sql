@@ -160,6 +160,20 @@ begin
   exception when insufficient_privilege then null;
   end;
 
+  begin
+    insert into public.annotations (client_id, date, label)
+    values ('00000000-0000-4000-b000-00000000000a', '2026-07-20', 'Viewer event');
+    raise exception 'FAIL: viewer A added a timeline event';
+  exception when insufficient_privilege then null;
+  end;
+
+  begin
+    insert into public.audit_log (actor_id, client_id, action)
+    values ('00000000-0000-4000-a000-0000000000a1', '00000000-0000-4000-b000-00000000000a', 'fake');
+    raise exception 'FAIL: viewer A wrote to the audit log';
+  exception when insufficient_privilege then null;
+  end;
+
   update public.metrics_daily set value = 0 where client_id = '00000000-0000-4000-b000-00000000000b';
   delete from public.metrics_daily where client_id = '00000000-0000-4000-b000-00000000000a';
   update public.monthly_commentary set status = 'published' where headline = 'A draft';
@@ -258,6 +272,37 @@ begin
 
   insert into public.metrics_daily (client_id, source, metric_key, date, value)
   values ('00000000-0000-4000-b000-00000000000b', 'ga4', 'ga4_sessions', '2026-07-03', 5);
+
+  -- Commentary editor: upsert a draft, then publish it, as the portal does.
+  insert into public.monthly_commentary (client_id, month, headline, summary, platform_narratives, section_notes, status, author_id)
+  values ('00000000-0000-4000-b000-00000000000b', '2026-06-01', 'Staff draft', 'Body', '{"ga4":{"headline":"h","body":"b"}}', '{}', 'draft',
+          '00000000-0000-4000-a000-0000000000c1')
+  on conflict (client_id, month) do update set headline = excluded.headline;
+  insert into public.monthly_commentary (client_id, month, headline, status, published_at, author_id)
+  values ('00000000-0000-4000-b000-00000000000b', '2026-06-01', 'Staff published', 'published', now(), '00000000-0000-4000-a000-0000000000c1')
+  on conflict (client_id, month) do update set headline = excluded.headline, status = excluded.status, published_at = excluded.published_at;
+  if (select status from public.monthly_commentary where headline = 'Staff published') <> 'published' then
+    raise exception 'FAIL: staff could not publish commentary';
+  end if;
+
+  -- Timeline events and the audit log.
+  insert into public.annotations (client_id, date, label, created_by)
+  values ('00000000-0000-4000-b000-00000000000b', '2026-06-15', 'Staff event', '00000000-0000-4000-a000-0000000000c1');
+  update public.annotations set label = 'Staff event edited' where label = 'Staff event';
+  delete from public.annotations where label = 'Staff event edited';
+  insert into public.audit_log (actor_id, client_id, action)
+  values ('00000000-0000-4000-a000-0000000000c1', '00000000-0000-4000-b000-00000000000b', 'event.create');
+  begin
+    insert into public.audit_log (actor_id, client_id, action)
+    values ('00000000-0000-4000-a000-0000000000a1', '00000000-0000-4000-b000-00000000000b', 'forged');
+    raise exception 'FAIL: staff logged an action as someone else';
+  exception when insufficient_privilege then null;
+  end;
+  update public.audit_log set action = 'tampered' where action = 'event.create';
+  delete from public.audit_log where action = 'event.create';
+  if not exists (select 1 from public.audit_log where action = 'event.create') then
+    raise exception 'FAIL: staff edited or deleted an audit log entry';
+  end if;
 
   begin
     insert into public.clients (name, slug) values ('Nope', 'nope');

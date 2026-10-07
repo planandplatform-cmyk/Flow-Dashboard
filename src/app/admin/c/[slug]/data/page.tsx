@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { AdminClientTop } from "@/components/admin-client-top";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
 import { getClientBySlug, getViewer, isFfm } from "@/lib/data/portal";
@@ -65,27 +66,16 @@ async function DataPageContent(props: PageProps<"/admin/c/[slug]/data">) {
     <>
       <PortalHeader client={client} viewer={viewer} />
       <main className="mx-auto max-w-6xl px-4 pb-24 pt-8 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-fg-muted">Manage data</p>
-            <h1 className="mt-1 border-l-4 border-teal pl-4 text-2xl font-semibold tracking-tight sm:text-3xl">{client.name}</h1>
-          </div>
-          <Link
-            href={`/c/${client.slug}`}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg-secondary transition hover:border-line-focus hover:text-fg"
-          >
-            View report →
-          </Link>
-        </div>
+        <AdminClientTop slug={client.slug} name={client.name} active="data" admin={viewer.role === "ffm_admin"} eyebrow="Manage data" />
 
-        <nav aria-label="Data tabs" className="mt-8 flex gap-1 overflow-x-auto border-b border-line">
+        <nav aria-label="Data tabs" className="mt-6 flex gap-2 overflow-x-auto [scrollbar-width:none]">
           {TABS.map((t) => (
             <Link
               key={t.id}
               href={`?tab=${t.id}`}
               aria-current={tab === t.id ? "page" : undefined}
-              className={`-mb-px whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition ${
-                tab === t.id ? "border-teal text-fg" : "border-transparent text-fg-secondary hover:text-fg"
+              className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                tab === t.id ? "border-teal bg-teal-950 text-teal" : "border-line bg-surface text-fg-secondary hover:border-line-focus hover:text-fg"
               }`}
             >
               {t.label}
