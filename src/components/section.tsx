@@ -12,7 +12,7 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24">
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-32">
       <h2 id={`${id}-title`} className="border-l-4 border-teal pl-4 text-xl font-semibold tracking-tight sm:text-2xl">
         {number !== undefined && <span className="mr-2 text-teal">{number}.</span>}
         {title}

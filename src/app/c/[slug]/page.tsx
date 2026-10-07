@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
+import { connection } from "next/server";
 import { InfoTip, MetricLabel } from "@/components/info-tip";
 import { BigDelta, KpiTile } from "@/components/kpi";
+import { PeriodPicker } from "@/components/period-picker";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
 import { Card, DataTable, Prose, Section, ShareBars } from "@/components/section";
+import { TrendCharts } from "@/components/trend-charts";
 import {
   getAdCampaigns,
   getAnnotations,
@@ -21,12 +24,14 @@ import {
   isFfm,
   type AudienceSnapshot,
 } from "@/lib/data/portal";
-import { addMonths, daysBetween, formatDay, formatMonth, formatRange, isValidMonthParam, monthOf, monthRange } from "@/lib/dates";
+import { addMonths, daysBetween, formatDay, formatMonth, formatRange, isValidMonthParam, monthOf, monthsBetween, todayIn } from "@/lib/dates";
 import { compare, MetricResolver, onlyEnabledSources, type DateRange } from "@/lib/metrics/aggregate";
 import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource, type SocialSource } from "@/lib/metrics/types";
+import { compareWindow, describeRange, PRESETS, resolvePeriod } from "@/lib/report/period";
+import { buildTrends, metricDependencies, TREND_KEYS, trendFetchRange, trendMonths } from "@/lib/report/trends";
 
 export const metadata: Metadata = { title: "Performance Report" };
 
@@ -95,41 +100,56 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
   const client = await getClientBySlug(slug);
   if (!client) notFound();
 
+  // "Today" decides the preset ranges, so the report always renders per request.
+  await connection();
+  const today = todayIn(client.timezone);
+  const thisMonth = monthOf(today);
+
   // Default landing: the latest month with published commentary, else the
-  // latest month with data.
-  let month: string;
-  if (isValidMonthParam(search.month)) {
-    month = `${search.month}-01`;
-  } else {
-    const published = await getLatestPublishedMonth(client.id);
-    const latestData = await getLatestDataDate(client.id);
-    month = published ?? (latestData ? monthOf(latestData) : monthOf(new Date().toISOString().slice(0, 10)));
+  // latest month with data. Only looked up when the URL does not say.
+  const needsDefault = !PRESETS.some((p) => p.id === search.range) && !isValidMonthParam(search.month);
+  let defaultMonth = thisMonth;
+  if (needsDefault) {
+    const [published, latestData] = await Promise.all([getLatestPublishedMonth(client.id), getLatestDataDate(client.id)]);
+    defaultMonth = published ?? (latestData ? monthOf(latestData) : thisMonth);
   }
-  const range = monthRange(month);
-  const prevRange = monthRange(addMonths(month, -1));
+  const period = resolvePeriod(search, { today, defaultMonth });
+  const { range, compareRange } = period;
   const enabled = new Set(client.enabled_sources);
 
-  // The ads section follows the PDF report: it covers the full window of every
-  // campaign that ran during the month, even if it extends past month end.
+  // For a calendar month the ads section follows the PDF report: it covers the
+  // full window of every campaign that ran during the month, even past month
+  // end. For any other range it covers the range itself.
   const campaigns = enabled.has("meta_ads") ? await getAdCampaigns(client.id, range) : [];
-  const adsRange: DateRange | null = campaigns.length
-    ? {
-        start: campaigns.map((c) => c.start_date ?? range.start).sort()[0],
-        end: campaigns.map((c) => c.end_date ?? range.end).sort().at(-1)!,
-      }
-    : null;
+  const adsRange: DateRange | null = !campaigns.length
+    ? null
+    : period.month
+      ? {
+          start: campaigns.map((c) => c.start_date ?? range.start).sort()[0],
+          end: campaigns.map((c) => c.end_date ?? range.end).sort().at(-1)!,
+        }
+      : range;
+  const adsCompare = adsRange ? compareWindow(period, adsRange) : null;
 
+  const windows = [range, compareRange, adsRange, adsCompare].filter((r): r is DateRange => r !== null);
   const fetchRange: DateRange = {
-    start: [prevRange.start, adsRange?.start ?? prevRange.start].sort()[0],
-    end: [range.end, adsRange?.end ?? range.end].sort().at(-1)!,
+    start: windows.map((r) => r.start).sort()[0],
+    end: windows.map((r) => r.end).sort().at(-1)!,
   };
 
-  const [allData, commentary, allPosts, allSnapshots, annotations] = await Promise.all([
+  // Trend charts: 12 months (and the year before) of the key metrics, totals only.
+  const months = trendMonths(range);
+  const trendRange = trendFetchRange(months);
+  const trendKeys = TREND_KEYS.filter((k) => METRICS[k].source === "combined" || enabled.has(METRICS[k].source));
+  const annotationRange: DateRange = { start: [months[0], range.start].sort()[0], end: [trendRange.end, range.end].sort().at(-1)! };
+
+  const [allData, trendData, commentary, allPosts, allSnapshots, allAnnotations] = await Promise.all([
     getMetricData(client.id, fetchRange),
-    getCommentary(client.id, month),
+    getMetricData(client.id, trendRange, { keys: metricDependencies(trendKeys), totalsOnly: true }),
+    period.month ? getCommentary(client.id, period.month) : Promise.resolve(null),
     getTopPosts(client.id, range, 8),
     getAudienceSnapshots(client.id, range),
-    getAnnotations(client.id, range),
+    getAnnotations(client.id, annotationRange),
   ]);
 
   // Only the client's turned-on channels appear anywhere in the report,
@@ -137,17 +157,56 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
   const data = onlyEnabledSources(allData, enabled);
   const posts = allPosts.filter((p) => enabled.has(p.platform));
   const snapshots = allSnapshots.filter((s) => enabled.has(s.platform));
+  const annotations = allAnnotations.filter((a) => a.date >= range.start && a.date <= range.end);
 
   const resolver = new MetricResolver(data);
   const val = (key: string, r: DateRange = range) => resolver.resolve(key, r).value;
-  const mom = (key: string) => compare(key, val(key), val(key, prevRange));
+  const mom = (key: string) => (compareRange ? compare(key, val(key), val(key, compareRange)) : null);
+  const adsCmp = (key: string) => (adsRange && adsCompare ? compare(key, val(key, adsRange), val(key, adsCompare)) : null);
 
   const socials = SOCIAL_SOURCES.filter((s) => enabled.has(s) && val(SOCIAL_OVERVIEW_KEYS[s].views) !== null);
   const narratives = commentary?.platform_narratives ?? {};
   const notes = commentary?.section_notes ?? {};
   const hasWebsite = enabled.has("ga4") && val("ga4_sessions") !== null;
   const hasAds = adsRange !== null && val("ads_spend", adsRange) !== null;
-  const momKeys = MOM_KEYS.filter((k) => val(k) !== null && val(k, prevRange) !== null);
+  const momKeys = compareRange ? MOM_KEYS.filter((k) => val(k) !== null && val(k, compareRange) !== null) : [];
+
+  const trends = buildTrends(new MetricResolver(onlyEnabledSources(trendData, enabled)), trendKeys, months, today, (k) => {
+    const def = METRICS[k];
+    return def.source === "combined" ? def.label : `${SOURCE_LABELS[def.source]} ${def.label}`;
+  });
+  const trendGroups = [
+    { id: "combined", label: "Combined", keys: trends.filter((t) => t.source === "combined").map((t) => t.key) },
+    ...client.enabled_sources.map((src) => ({ id: src, label: SOURCE_LABELS[src], keys: trends.filter((t) => t.source === src).map((t) => t.key) })),
+  ].filter((g) => g.keys.length > 0);
+  const chartAnnotations = allAnnotations.map((a) => ({ month: monthOf(a.date), date: a.date, label: `${formatDay(a.date)}: ${a.label}` }));
+
+  const showContent = (posts.length > 0 || snapshotsOf(snapshots, "meta_facebook", "format_engagement").length > 0);
+  const showAudience = snapshots.some((s) => ["age", "gender", "country", "language"].includes(s.breakdown_type));
+  const showDiscovery = snapshots.some((s) => ["discovery_surface", "follower_status"].includes(s.breakdown_type));
+  const showVideo = (val("ig_reels_views") !== null || val("fb_reels_interactions") !== null);
+
+  const nav = [
+    { id: "summary", label: "Summary", show: true },
+    { id: "terms", label: "Key terms", show: true },
+    { id: "social", label: "Social", show: socials.length > 0 },
+    { id: "platforms", label: "Platforms", show: socials.length > 0 },
+    { id: "website", label: "Website", show: hasWebsite },
+    { id: "content", label: "Content", show: showContent },
+    { id: "audience", label: "Audience", show: showAudience },
+    { id: "discovery", label: "Discovery", show: showDiscovery },
+    { id: "video", label: "Video", show: showVideo },
+    { id: "ads", label: "Ads", show: hasAds },
+    { id: "mom", label: "Comparison", show: momKeys.length > 0 },
+    { id: "trends", label: "Trends", show: trends.length > 0 },
+  ].filter((n) => n.show);
+
+  const compareTitle =
+    period.compareMode === "yoy"
+      ? "Year-over-Year Comparison"
+      : period.compareMode === "previous" && period.month
+        ? "Month-over-Month Comparison"
+        : "Period Comparison";
 
   let n = 0;
   const next = () => ++n;
@@ -158,30 +217,58 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     ...(hasWebsite ? [{ key: "ga4_engagement_rate", caption: "Website visits that engaged", label: "Website Engagement" }] : []),
   ] as { key: string; caption: string; label?: string }[];
 
-  const monthLinks = { prev: addMonths(month, -1).slice(0, 7), next: addMonths(month, 1).slice(0, 7) };
+  const pickerMonths = monthsBetween(addMonths(thisMonth, -35), thisMonth)
+    .reverse()
+    .map((m) => [m, formatMonth(m)] as [string, string]);
 
   return (
     <>
       <PortalHeader client={client} viewer={viewer} />
 
       <main className="mx-auto max-w-6xl space-y-16 px-4 pb-24 pt-8 sm:px-6">
-        {/* Period bar. Full date range picker and comparison modes arrive in Phase 3. */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wider text-fg-muted">Reporting period</p>
-            <p className="mt-1 text-lg font-semibold">
-              {formatMonth(month)} <span className="font-normal text-fg-secondary">· compared with {formatMonth(prevRange.start)}</span>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{period.label}</h1>
+            <p className="mt-1 text-sm text-fg-secondary">
+              {period.label === describeRange(range) ? "" : `${describeRange(range)} · `}
+              {period.compareLabel ? `Compared with ${period.compareLabel}` : "No comparison"}
             </p>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <Link href={`?month=${monthLinks.prev}`} className="rounded-lg border border-line bg-surface px-3 py-2 text-fg-secondary transition hover:border-line-focus hover:text-fg">
-              ← {formatMonth(monthLinks.prev)}
-            </Link>
-            <Link href={`?month=${monthLinks.next}`} className="rounded-lg border border-line bg-surface px-3 py-2 text-fg-secondary transition hover:border-line-focus hover:text-fg">
-              {formatMonth(monthLinks.next)} →
-            </Link>
-          </div>
+          <PeriodPicker
+            preset={period.preset}
+            range={range}
+            label={period.label}
+            rangeLabel={describeRange(range)}
+            compareMode={period.compareMode}
+            compareRange={compareRange}
+            compareLabel={period.compareLabel}
+            months={pickerMonths}
+            prevMonth={period.month ? addMonths(period.month, -1) : null}
+            nextMonth={period.month && period.month < thisMonth ? addMonths(period.month, 1) : null}
+          />
         </div>
+
+        <nav
+          aria-label="Report sections"
+          className="sticky top-16 z-30 -mx-4 -my-10 border-b border-line bg-page/90 px-4 backdrop-blur sm:mx-0 sm:px-0"
+        >
+          <ul className="-mb-px flex gap-1 overflow-x-auto py-2 text-sm [scrollbar-width:none]">
+            {nav.map((n) => (
+              <li key={n.id} className="shrink-0">
+                <a href={`#${n.id}`} className="block rounded-md px-3 py-1.5 text-fg-secondary transition hover:bg-raised hover:text-fg">
+                  {n.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {period.notice && (
+          <p className="rounded-lg border border-line bg-raised p-3 text-sm text-fg-secondary" role="status">
+            {period.notice}
+          </p>
+        )}
 
         {commentary?.status === "draft" && isFfm(viewer.role) && (
           <p className="rounded-lg border border-line-focus bg-teal-950 p-3 text-sm text-teal-100">
@@ -194,13 +281,15 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
           <div className="relative overflow-hidden rounded-2xl border border-line-focus bg-gradient-to-br from-teal-900 via-teal-950 to-page p-6 sm:p-10">
             <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-teal/10 blur-3xl" />
             <h3 className="relative text-2xl font-semibold leading-tight tracking-tight sm:text-4xl">
-              {commentary?.headline ?? `${client.name} performance for ${formatMonth(month)}`}
+              {commentary?.headline ?? `${client.name} performance for ${describeRange(range)}`}
             </h3>
             <div className="relative mt-6 max-w-3xl text-sm leading-relaxed text-teal-100 sm:text-base">
               {commentary?.summary ? (
                 <Prose text={commentary.summary} />
-              ) : (
+              ) : period.month ? (
                 <p>Flow Forward Media&apos;s summary for this month is on its way.</p>
+              ) : (
+                <p>Flow Forward Media writes a summary for each calendar month. Choose a single month to read it.</p>
               )}
             </div>
           </div>
@@ -354,7 +443,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         )}
 
         {/* 5. Content */}
-        {(posts.length > 0 || snapshotsOf(snapshots, "meta_facebook", "format_engagement").length > 0) && (
+        {showContent && (
           <Section id="content" number={next()} title="Content and Engagement Analysis" intro={notes.content}>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
               {posts.length > 0 && (
@@ -388,7 +477,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         )}
 
         {/* 6. Demographics */}
-        {snapshots.some((s) => ["age", "gender", "country", "language"].includes(s.breakdown_type)) && (
+        {showAudience && (
           <Section id="audience" number={next()} title="Audience Growth and Demographics" intro={notes.demographics}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {SOCIAL_SOURCES.flatMap((s) =>
@@ -410,7 +499,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         )}
 
         {/* 7. Discovery */}
-        {snapshots.some((s) => ["discovery_surface", "follower_status"].includes(s.breakdown_type)) && (
+        {showDiscovery && (
           <Section id="discovery" number={next()} title="Visibility, Discovery, and Profile Activity" intro={notes.discovery}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {SOCIAL_SOURCES.flatMap((s) =>
@@ -433,7 +522,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         )}
 
         {/* 8. Video */}
-        {(val("ig_reels_views") !== null || val("fb_reels_interactions") !== null) && (
+        {showVideo && (
           <Section id="video" number={next()} title="Video and Short-Form Content Performance" intro={notes.video}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {["ig_reels_views", "fb_reels_engagement_share", "ig_reels_interactions"]
@@ -463,15 +552,27 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
               )}
             </div>
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <KpiTile metricKey="ads_leads" label="Leads Generated" value={val("ads_leads", adsRange)} caption={formatRange(adsRange)} />
+              <KpiTile
+                metricKey="ads_leads"
+                label="Leads Generated"
+                value={val("ads_leads", adsRange)}
+                comparison={adsCmp("ads_leads")}
+                caption={formatRange(adsRange)}
+              />
               <KpiTile
                 metricKey="ads_reach"
                 label="Total Reach"
                 value={val("ads_reach", adsRange)}
                 estimated={resolver.resolve("ads_reach", adsRange).estimated}
+                comparison={adsCmp("ads_reach")}
                 caption="Different people reached"
               />
-              <KpiTile metricKey="ads_spend" value={val("ads_spend", adsRange)} caption={`${daysBetween(adsRange)} days of activity`} />
+              <KpiTile
+                metricKey="ads_spend"
+                value={val("ads_spend", adsRange)}
+                comparison={adsCmp("ads_spend")}
+                caption={`${daysBetween(adsRange)} days of activity`}
+              />
             </div>
             <div className="mt-6">
               <DataTable
@@ -489,10 +590,10 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
 
         {/* 10. Month over month */}
         {momKeys.length > 0 && (
-          <Section id="mom" number={next()} title="Month-over-Month Comparison">
+          <Section id="mom" number={next()} title={compareTitle} intro={`${period.label} compared with ${period.compareLabel}.`}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {momKeys.map((k) => {
-                const c = mom(k);
+                const c = mom(k)!;
                 const def = METRICS[k];
                 const prefix = def.source === "combined" ? "" : `${SOURCE_LABELS[def.source as DataSource]} `;
                 return (
@@ -515,6 +616,18 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 );
               })}
             </div>
+          </Section>
+        )}
+
+        {/* Trends */}
+        {trends.length > 0 && (
+          <Section
+            id="trends"
+            number={next()}
+            title="Monthly Trends"
+            intro={`Month by month, ${formatMonth(months[0])} to ${formatMonth(months.at(-1)!)}. Hover or tap a chart for exact numbers.`}
+          >
+            <TrendCharts series={trends} annotations={chartAnnotations} groups={trendGroups} />
           </Section>
         )}
 

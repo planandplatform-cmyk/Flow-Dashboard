@@ -58,7 +58,8 @@ export function BigDelta({ comparison }: { comparison: Comparison }) {
 
 /**
  * KPI tile in the report style: thin teal bar on top, large teal number,
- * small uppercase gray label, change versus the comparison period.
+ * small uppercase gray label, then the percent change, the change in units,
+ * and the comparison period's value.
  */
 export function KpiTile({
   metricKey,
@@ -96,9 +97,10 @@ export function KpiTile({
         className="mt-2 block text-xs font-medium uppercase tracking-wider text-fg-secondary"
       />
       {caption && <p className="mt-1 text-xs text-fg-muted">{caption}</p>}
-      {comparison && (
-        <div className="mt-3">
+      {comparison && comparison.direction !== null && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
           <DeltaBadge metricKey={metricKey} comparison={comparison} />
+          <span className="text-xs tabular-nums text-fg-muted">vs {formatMetric(metricKey, comparison.previous)}</span>
         </div>
       )}
     </div>

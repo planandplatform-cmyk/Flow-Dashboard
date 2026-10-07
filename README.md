@@ -14,7 +14,8 @@ magic-link auth, row-level security), deployed on Vercel.
 | `src/lib/metrics/aggregate.ts` | Rolls metrics up over any range. Ratios (engagement rate, CTR, CPL, frequency) are always recomputed from their parts, never averaged. |
 | `src/lib/metrics/glossary.ts` | Key Terms glossary from the monthly report. |
 | `src/lib/data/portal.ts` | All data reads. Queries run as the signed-in user, so RLS decides what comes back. |
-| `src/app/c/[slug]` | Client report page, laid out like the monthly PDF. |
+| `src/app/c/[slug]` | Client report page, laid out like the monthly PDF, with date range, comparison and 12-month trend charts. |
+| `src/lib/report` | Date range and comparison rules (`period.ts`) and monthly trend series (`trends.ts`). |
 | `src/app/admin/c/[slug]/data` | FFM-only data page: file upload with preview, manual entry, upload history with rollback. |
 | `src/lib/ingest` | File reading and one parser per platform export, plus AI reading of screenshots and PDFs (`screenshot.ts`, `screenshot-reader.ts`). See [docs/uploading-data.md](docs/uploading-data.md). |
 | `supabase/migrations` | Schema and row-level security. |
@@ -110,6 +111,25 @@ in the Supabase SQL Editor.
 Channels can be changed later in **Settings**. Turning one off hides it from the report and keeps
 its data. **Archive** hides a client from lists and blocks its logins (enforced in the database);
 it can be restored. Admins invite and manage FFM staff under **Team**.
+
+## Report views
+
+The date picker on the report sets the range and the comparison, and both live in the URL, so
+any view can be bookmarked or sent to a client:
+
+| URL | Shows |
+| --- | --- |
+| `/c/wieler-roofing` | Latest month with published commentary (else latest month with data) vs the month before |
+| `?month=2026-07` | July 2026 vs June 2026 |
+| `?range=last_30` | Last 30 days, ending yesterday. Also `this_month`, `last_month`, `qtd`, `ytd`, `last_12` |
+| `?range=custom&from=2026-04-01&to=2026-06-30` | Any range up to 3 years |
+| `&compare=yoy` | Same period last year. Also `none`, or `custom&cfrom=…&cto=…` |
+
+"Previous period" is the same stretch of time just before: a month compares with the month
+before, quarter to date with the previous quarter to the same day, and day ranges with the same
+number of days. Monthly commentary shows when the view is exactly one calendar month. Trend
+charts cover the 12 months ending with the selected range, with the year before dashed and
+annotated events marked.
 
 ## Roles
 

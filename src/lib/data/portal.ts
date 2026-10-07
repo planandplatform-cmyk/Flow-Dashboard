@@ -92,17 +92,36 @@ export { isFfm };
 
 const PAGE = 1000; // PostgREST default max rows per request
 
-/** Page through a query so large ranges are never silently truncated. */
-async function fetchAll<T>(
-  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build(from, from + PAGE - 1);
-    if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < PAGE) return out;
+type Page<T> = { data: T[] | null; error: { message: string } | null; count?: number | null };
+
+/**
+ * Page through a query so large ranges are never silently truncated. The
+ * first page also returns the row count, so the rest load in parallel.
+ */
+async function fetchAll<T>(build: (from: number, to: number, withCount: boolean) => PromiseLike<Page<T>>): Promise<T[]> {
+  const first = await build(0, PAGE - 1, true);
+  if (first.error) throw new Error(first.error.message);
+  const out = [...(first.data ?? [])];
+  if (out.length < PAGE) return out;
+  const total = first.count ?? null;
+  if (total === null) {
+    for (let from = PAGE; ; from += PAGE) {
+      const { data, error } = await build(from, from + PAGE - 1, false);
+      if (error) throw new Error(error.message);
+      out.push(...(data ?? []));
+      if (!data || data.length < PAGE) return out;
+    }
   }
+  const starts: number[] = [];
+  for (let from = PAGE; from < total; from += PAGE) starts.push(from);
+  for (let i = 0; i < starts.length; i += 6) {
+    const pages = await Promise.all(starts.slice(i, i + 6).map((from) => build(from, from + PAGE - 1, false)));
+    for (const { data, error } of pages) {
+      if (error) throw new Error(error.message);
+      out.push(...(data ?? []));
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,61 +162,80 @@ export const getClientBySlug = cache(async (slug: string): Promise<Client | null
 // Metrics
 // ---------------------------------------------------------------------------
 
+export interface MetricQuery {
+  /** Only these metric keys (include ratio and derived components). */
+  keys?: string[];
+  /** Skip breakdown rows (by channel, page...): enough for trend charts. */
+  totalsOnly?: boolean;
+}
+
 /**
  * Daily and period rows covering a range, with ad delivery folded in as
  * ads_* metric keys. Pass the union of current and comparison ranges.
  */
-export async function getMetricData(clientId: string, range: DateRange): Promise<MetricData> {
+export async function getMetricData(clientId: string, range: DateRange, query: MetricQuery = {}): Promise<MetricData> {
+  const wanted = query.keys ? new Set(query.keys) : null;
+  const keep = (r: { metric_key: string; dimension?: string }) =>
+    (!wanted || wanted.has(r.metric_key)) && (!query.totalsOnly || !r.dimension);
+  const needAds = !wanted || [...wanted].some((k) => k.startsWith("ads_"));
+
   if (isDemoMode()) {
     const fx = await demo();
     const inRange = (d: string) => d >= range.start && d <= range.end;
     return {
       daily: [
         ...(own(fx.metricsDaily, clientId) as DailyRow[]).filter((r) => inRange(r.date)),
-        ...adRowsToDaily(own(fx.adMetricsDaily, clientId).filter((r) => inRange(r.date))),
-      ],
-      period: (own(fx.metricsPeriod, clientId) as PeriodRow[]).filter((r) => r.period_start <= range.end && r.period_end >= range.start),
+        ...(needAds ? adRowsToDaily(own(fx.adMetricsDaily, clientId).filter((r) => inRange(r.date))) : []),
+      ].filter(keep),
+      period: (own(fx.metricsPeriod, clientId) as PeriodRow[])
+        .filter((r) => r.period_start <= range.end && r.period_end >= range.start)
+        .filter(keep),
     };
   }
 
   const supabase = await createClient();
+  const count = (withCount: boolean) => (withCount ? ({ count: "exact" } as const) : undefined);
   const [daily, period, ads] = await Promise.all([
-    fetchAll<DailyRow>((from, to) =>
-      supabase
+    fetchAll<DailyRow>((from, to, withCount) => {
+      let q = supabase
         .from("metrics_daily")
-        .select("metric_key, date, value, dimension, dimension_value")
+        .select("metric_key, date, value, dimension, dimension_value", count(withCount))
         .eq("client_id", clientId)
         .gte("date", range.start)
-        .lte("date", range.end)
-        .order("id")
-        .range(from, to),
-    ),
-    fetchAll<PeriodRow>((from, to) =>
-      supabase
+        .lte("date", range.end);
+      if (wanted) q = q.in("metric_key", [...wanted]);
+      if (query.totalsOnly) q = q.eq("dimension", "");
+      return q.order("id").range(from, to);
+    }),
+    fetchAll<PeriodRow>((from, to, withCount) => {
+      let q = supabase
         .from("metrics_period")
-        .select("metric_key, period_start, period_end, value, dimension, dimension_value")
+        .select("metric_key, period_start, period_end, value, dimension, dimension_value", count(withCount))
         .eq("client_id", clientId)
         // Any period overlapping the range; the resolver prorates partial ones.
         .lte("period_start", range.end)
-        .gte("period_end", range.start)
-        .order("id")
-        .range(from, to),
-    ),
-    fetchAll<AdMetricsDailyRow>((from, to) =>
-      supabase
-        .from("ad_metrics_daily")
-        .select("date, spend, impressions, reach, clicks, leads")
-        .eq("client_id", clientId)
-        .gte("date", range.start)
-        .lte("date", range.end)
-        .order("id")
-        .range(from, to),
-    ),
+        .gte("period_end", range.start);
+      if (wanted) q = q.in("metric_key", [...wanted]);
+      if (query.totalsOnly) q = q.eq("dimension", "");
+      return q.order("id").range(from, to);
+    }),
+    needAds
+      ? fetchAll<AdMetricsDailyRow>((from, to, withCount) =>
+          supabase
+            .from("ad_metrics_daily")
+            .select("date, spend, impressions, reach, clicks, leads", count(withCount))
+            .eq("client_id", clientId)
+            .gte("date", range.start)
+            .lte("date", range.end)
+            .order("id")
+            .range(from, to),
+        )
+      : Promise.resolve([] as AdMetricsDailyRow[]),
   ]);
 
   // numeric columns arrive as strings from PostgREST
   const num = <T extends { value: number | string }>(r: T) => ({ ...r, value: Number(r.value) });
-  return { daily: [...daily.map(num), ...adRowsToDaily(ads)], period: period.map(num) };
+  return { daily: [...daily.map(num), ...adRowsToDaily(ads).filter(keep)], period: period.map(num) };
 }
 
 /** Last date with any metric data for the client, or null. */
