@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "seed:generate": "tsx scripts/generate-seed.ts",
-    "test:rls": "bash scripts/test-rls-local.sh"
+    "test:rls": "bash scripts/test-rls-local.sh",
+    "db:bundle": "bash scripts/bundle-setup-sql.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

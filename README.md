@@ -54,9 +54,10 @@ npm run seed:generate
 ## Setting up Supabase (one time)
 
 1. **Create a project** at https://supabase.com (Pro plan recommended for daily backups).
-2. **Run the migrations.** In the Supabase dashboard open *SQL Editor*, paste and run each
-   file in `supabase/migrations` in filename order. Or, with the Supabase CLI:
+2. **Create the tables.** In the Supabase dashboard open *SQL Editor*, paste all of
+   `supabase/setup.sql` (every migration in one file) and press Run. Or, with the Supabase CLI:
    `supabase link --project-ref <ref>` then `supabase db push`.
+   After later updates, run only the new files in `supabase/migrations`.
 3. **Load the demo client.** Paste and run `supabase/seed.sql` in the SQL Editor.
 4. **Prove RLS works on the real database.** Paste and run `supabase/tests/rls.test.sql`,
    then `supabase/tests/uploads.test.sql`. They end with `RLS tests passed` and
