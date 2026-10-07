@@ -12,16 +12,18 @@ update public.users set role = 'ffm_staff' where id = '00000000-0000-4000-a000-0
 insert into public.user_clients (user_id, client_id)
 values ('00000000-0000-4000-a000-0000000000f2', '5f0c9a1e-7b2d-4c3e-9a41-0d6b8e2f1a01');
 
--- Original seeded values we will overwrite.
-create temp table original as
+-- Original seeded values we will overwrite. Kept as transaction-local
+-- settings (not a temp table) so they stay readable after switching role on
+-- Supabase, where the postgres user is not a superuser.
 select
-  (select value from public.metrics_daily where client_id = '5f0c9a1e-7b2d-4c3e-9a41-0d6b8e2f1a01'
-     and metric_key = 'fb_views' and date = '2026-07-20' and dimension = '') as fb_views_0720,
-  (select count(*) from public.audience_snapshots where client_id = '5f0c9a1e-7b2d-4c3e-9a41-0d6b8e2f1a01'
-     and breakdown_type = 'age') as age_rows,
-  (select count(*) from public.metrics_daily) as daily_rows,
-  (select spend from public.ad_metrics_daily where date = '2026-07-20') as spend_0720;
-grant select on original to authenticated;
+  set_config('uploads_test.fb_views_0720', (select value from public.metrics_daily
+    where client_id = '5f0c9a1e-7b2d-4c3e-9a41-0d6b8e2f1a01' and source = 'meta_facebook'
+      and metric_key = 'fb_views' and date = '2026-07-20' and dimension = '')::text, true),
+  set_config('uploads_test.age_rows', (select count(*) from public.audience_snapshots
+    where client_id = '5f0c9a1e-7b2d-4c3e-9a41-0d6b8e2f1a01' and breakdown_type = 'age')::text, true),
+  set_config('uploads_test.daily_rows', (select count(*) from public.metrics_daily)::text, true),
+  set_config('uploads_test.spend_0720', (select spend from public.ad_metrics_daily
+    where client_id = '5f0c9a1e-7b2d-4c3e-9a41-0d6b8e2f1a01' and date = '2026-07-20')::text, true);
 
 set local role authenticated;
 
@@ -67,7 +69,14 @@ declare
   res jsonb;
   o record;
 begin
-  select * into o from original;
+  select current_setting('uploads_test.fb_views_0720')::numeric as fb_views_0720,
+         current_setting('uploads_test.age_rows')::bigint as age_rows,
+         current_setting('uploads_test.daily_rows')::bigint as daily_rows,
+         current_setting('uploads_test.spend_0720')::numeric as spend_0720
+    into o;
+  if o.fb_views_0720 is null or o.spend_0720 is null then
+    raise exception 'FAIL: demo seed not loaded. Run supabase/seed/01-wieler-roofing.sql first.';
+  end if;
 
   preview := public.preview_upload(c, batch_a);
   if (preview -> 'daily' ->> 'existing')::int <> 2 or (preview -> 'daily' ->> 'changed')::int <> 2 then
