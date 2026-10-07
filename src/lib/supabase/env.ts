@@ -12,7 +12,12 @@ export function normalizeSupabaseUrl(raw: string | undefined): string {
   if (!value) return "";
   if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
   try {
-    return new URL(value).origin;
+    const url = new URL(value);
+    // A dashboard address (supabase.com/dashboard/project/<ref>) pasted
+    // instead of the Project URL: the project ref gives the real address.
+    const ref = /^\/dashboard\/project\/([a-z0-9]{10,40})/i.exec(url.pathname)?.[1];
+    if (/(^|\.)supabase\.com$/i.test(url.hostname) && ref) return `https://${ref.toLowerCase()}.supabase.co`;
+    return url.origin;
   } catch {
     return value;
   }
@@ -35,6 +40,9 @@ export function supabaseConfigProblem(): string | null {
   }
   if (!url || !url.hostname.includes(".")) {
     return "NEXT_PUBLIC_SUPABASE_URL is not a web address. It should look like https://abcdefgh.supabase.co (Supabase: Project Settings, Data API).";
+  }
+  if (/(^|\.)supabase\.com$/i.test(url.hostname)) {
+    return "NEXT_PUBLIC_SUPABASE_URL is a Supabase dashboard address. Use the Project URL instead, like https://abcdefgh.supabase.co (Supabase: Project Settings, Data API).";
   }
   if (!SUPABASE_PUBLISHABLE_KEY) return "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is not set.";
   if (SUPABASE_PUBLISHABLE_KEY.startsWith("sb_secret_")) {

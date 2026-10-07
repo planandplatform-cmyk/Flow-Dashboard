@@ -14,4 +14,9 @@ describe("Supabase URL from pasted values", () => {
     }
     expect(normalizeSupabaseUrl("")).toBe("");
   });
+
+  it("turns a pasted dashboard address into the project URL", () => {
+    expect(normalizeSupabaseUrl("https://supabase.com/dashboard/project/abcdefghijklmnopqrst")).toBe("https://abcdefghijklmnopqrst.supabase.co");
+    expect(normalizeSupabaseUrl("https://supabase.com/dashboard/project/abcdefghijklmnopqrst/settings/api")).toBe("https://abcdefghijklmnopqrst.supabase.co");
+  });
 });
