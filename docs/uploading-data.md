@@ -94,7 +94,7 @@ Rates (engagement rate, CTR, cost per lead) are ignored on purpose: the portal w
 from the underlying numbers. On LinkedIn, reactions, comments, reposts and clicks are added up into
 Interactions.
 
-Reading costs a few cents per batch of screenshots. It needs `ANTHROPIC_API_KEY` set in Vercel.
+Reading costs roughly 5 to 25 cents per batch of screenshots, depending on how many and how large. It needs `ANTHROPIC_API_KEY` set in Vercel.
 
 ## Enter manually
 
