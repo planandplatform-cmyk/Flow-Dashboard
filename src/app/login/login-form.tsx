@@ -33,7 +33,11 @@ export function LoginForm({ next, demo }: { next?: string; demo: boolean }) {
     // Same message whether or not the address has an account, so the form
     // cannot be used to discover who is a client.
     if (error && error.status !== 422 && error.status !== 400) {
-      setState({ kind: "error", message: "We could not send your link. Please try again in a minute." });
+      const message =
+        error.status === 429
+          ? "Too many sign-in emails were requested. Wait a few minutes, then try again."
+          : `We could not send your link. Please try again in a minute. (${error.message})`;
+      setState({ kind: "error", message });
       return;
     }
     setState({ kind: "sent", email });
