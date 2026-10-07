@@ -58,7 +58,9 @@ npm run seed:generate
    `supabase/setup.sql` (every migration in one file) and press Run. Or, with the Supabase CLI:
    `supabase link --project-ref <ref>` then `supabase db push`.
    After later updates, run only the new files in `supabase/migrations`.
-3. **Load the demo client.** Paste and run `supabase/seed.sql` in the SQL Editor.
+3. **Load the demo clients.** In the SQL Editor run `supabase/seed/01-wieler-roofing.sql`, then
+   `supabase/seed/02-lubbock-med-spa.sql` (split in two because the editor rejects large queries;
+   `supabase/seed.sql` is the same data in one file, for the CLI).
 4. **Prove RLS works on the real database.** Paste and run `supabase/tests/rls.test.sql`,
    then `supabase/tests/uploads.test.sql`. They end with `RLS tests passed` and
    `Upload tests passed`, and roll everything back. (They expect the demo seed to be loaded.)
