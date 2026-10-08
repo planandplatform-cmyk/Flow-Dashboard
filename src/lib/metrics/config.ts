@@ -408,7 +408,7 @@ const definitions: MetricDefinition[] = [
     format: "currency",
     aggregation: sum,
     upIsGood: false,
-    dimensions: ["campaign"],
+    dimensions: ["campaign", "search_term", "keyword", "ad_group"],
   },
   {
     key: "gads_impressions",
@@ -418,7 +418,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["campaign"],
+    dimensions: ["campaign", "search_term", "keyword", "ad_group"],
   },
   {
     key: "gads_clicks",
@@ -428,7 +428,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["campaign"],
+    dimensions: ["campaign", "search_term", "keyword", "ad_group"],
   },
   {
     key: "gads_conversions",
@@ -438,7 +438,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["campaign"],
+    dimensions: ["campaign", "search_term", "keyword", "ad_group"],
   },
   {
     key: "gads_conversion_value",
@@ -448,7 +448,7 @@ const definitions: MetricDefinition[] = [
     format: "currency",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["campaign"],
+    dimensions: ["campaign", "search_term", "keyword", "ad_group"],
   },
   {
     key: "gads_ctr",

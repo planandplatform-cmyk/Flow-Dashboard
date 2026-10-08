@@ -224,6 +224,25 @@ export async function loadReport(client: Client, search: Search, opts: { publish
         };
       })
     : [];
+  // Top search terms and keywords, by clicks, when those reports were uploaded.
+  const googleTop = (dimension: "search_term" | "keyword") =>
+    hasGoogleAds
+      ? resolver
+          .breakdown("gads_clicks", dimension, range)
+          .slice(0, 10)
+          .map(({ bucket, value }) => {
+            const f = { dimension, value: bucket };
+            return {
+              name: bucket,
+              clicks: value,
+              impressions: resolver.resolve("gads_impressions", range, f).value,
+              spend: resolver.resolve("gads_spend", range, f).value,
+              conversions: resolver.resolve("gads_conversions", range, f).value,
+            };
+          })
+      : [];
+  const googleSearchTerms = googleTop("search_term");
+  const googleKeywords = googleTop("keyword");
   const momKeys = compareRange ? MOM_KEYS.filter((k) => val(k) !== null && val(k, compareRange) !== null) : [];
 
   const trends = buildTrends(new MetricResolver(onlyEnabledSources(trendData, enabled), { prorate: false }), trendKeys, months, today, (k) => {
@@ -307,6 +326,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     hasAds,
     hasGoogleAds,
     googleCampaigns,
+    googleSearchTerms,
+    googleKeywords,
     momKeys,
     months,
     trends,

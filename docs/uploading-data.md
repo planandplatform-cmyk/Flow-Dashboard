@@ -62,7 +62,13 @@ or **Excel .csv**. Keep the Cost, Impr., Clicks, Conversions and Conv. value col
 - Without a Day segment: totals for the date range shown at the top of the file, per campaign.
 - With **Segment > Time > Day**: daily numbers, so any date range works.
 
-Google's "Total:" rows are skipped; account totals are added up from the campaigns. CTR, Avg.
+**Search terms** and **Keywords** reports (Insights and reports > Search terms, or Keywords)
+work too: each term or keyword is saved for the "Top search terms" table, and totals come from
+Google's own "Total: Account" or "Total: Campaign" row, which includes the "Other search terms"
+Google does not list. If a search terms report was filtered to one campaign, upload the
+Campaigns export as well for account totals.
+
+In a Campaigns export, Google's "Total:" row is used for the account totals. CTR, Avg.
 CPC, Cost / conv., Conv. rate and ROAS are recalculated by the portal, never taken from the
 file. Google Ads screenshots and full reports that include Google Ads can also be read with AI.
 

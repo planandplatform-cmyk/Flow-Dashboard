@@ -452,6 +452,31 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                 highlight={1}
               />
             </View>
+            {(
+              [
+                ["Top search terms by clicks", "Search term", r.googleSearchTerms],
+                ["Top keywords by clicks", "Keyword", r.googleKeywords],
+              ] as const
+            )
+              .filter(([, , rows]) => rows.length > 0)
+              .map(([title, col, rows]) => (
+                <View key={title} style={{ marginTop: 8 }} wrap={false}>
+                  <Text style={[s.label, { marginBottom: 4 }]}>{title}</Text>
+                  <Table
+                    s={s}
+                    t={t}
+                    widths={[40, 15, 15, 15, 15]}
+                    head={[col, "Clicks", "Impressions", "Cost", "Conversions"]}
+                    rows={rows.map((x) => [
+                      x.name,
+                      formatMetric("gads_clicks", x.clicks),
+                      formatMetric("gads_impressions", x.impressions),
+                      formatMetric("gads_spend", x.spend),
+                      formatMetric("gads_conversions", x.conversions),
+                    ])}
+                  />
+                </View>
+              ))}
             {r.googleCampaigns.length > 0 && (
               <View style={{ marginTop: 8 }} wrap={false}>
                 <Text style={[s.label, { marginBottom: 4 }]}>By campaign</Text>

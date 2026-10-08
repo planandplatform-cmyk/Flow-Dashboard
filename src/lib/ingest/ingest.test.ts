@@ -157,6 +157,22 @@ describe("Google Ads", () => {
     expect(r.batch.period.some((p) => /ctr|cpc|cpa/.test(p.metric_key))).toBe(false);
   });
 
+  it("reads a search terms report: totals from Google's total row, terms combined across match types", () => {
+    const r = parse("google-ads-search-terms.csv");
+    expect(r.errors).toEqual([]);
+    expect(r.parserId).toBe("google_ads");
+    const p = r.batch.period;
+    expect(p.every((x) => x.period_start === "2026-09-01" && x.period_end === "2026-09-30")).toBe(true);
+    const total = (key: string) => p.find((x) => x.metric_key === key && !x.dimension)?.value;
+    // "Total: Campaign" includes Google's unlisted "Other search terms".
+    expect([total("gads_clicks"), total("gads_impressions"), total("gads_spend"), total("gads_conversions")]).toEqual([120, 802, 349.01, 3]);
+    const term = (t: string, key: string) => p.find((x) => x.dimension === "search_term" && x.dimension_value === t && x.metric_key === key)?.value;
+    expect(term("faa academy housing", "gads_clicks")).toBe(18);
+    expect(term("faa housing", "gads_impressions")).toBe(64); // 21 phrase + 43 exact
+    expect(term("faa crashpads", "gads_conversions")).toBe(1);
+    expect(r.warnings.join(" ")).toMatch(/Total: Campaign/);
+  });
+
   it("reads a daily export", () => {
     const r = parse("google-ads-daily.csv");
     expect(r.errors).toEqual([]);

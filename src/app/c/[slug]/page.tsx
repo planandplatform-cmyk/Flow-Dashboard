@@ -67,6 +67,8 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     hasAds,
     hasGoogleAds,
     googleCampaigns,
+    googleSearchTerms,
+    googleKeywords,
     momKeys,
     months,
     trends,
@@ -545,6 +547,35 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 />
               </div>
             )}
+            {(
+              [
+                ["Top search terms", googleSearchTerms],
+                ["Top keywords", googleKeywords],
+              ] as const
+            )
+              .filter(([, rows]) => rows.length > 0)
+              .map(([title, rows]) => (
+                <div key={title} className="mt-6">
+                  <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">{title} by clicks</h3>
+                  <DataTable
+                    caption={`Google Ads ${title.toLowerCase()}`}
+                    columns={[
+                      { label: title === "Top search terms" ? "Search term" : "Keyword" },
+                      { label: <MetricLabel metricKey="gads_clicks" />, align: "right" },
+                      { label: <MetricLabel metricKey="gads_impressions" />, align: "right" },
+                      { label: <MetricLabel metricKey="gads_spend" />, align: "right" },
+                      { label: <MetricLabel metricKey="gads_conversions" />, align: "right" },
+                    ]}
+                    rows={rows.map((t) => [
+                      <span key={t.name} className="text-fg">{t.name}</span>,
+                      formatMetric("gads_clicks", t.clicks),
+                      formatMetric("gads_impressions", t.impressions),
+                      formatMetric("gads_spend", t.spend),
+                      formatMetric("gads_conversions", t.conversions),
+                    ])}
+                  />
+                </div>
+              ))}
           </Section>
         )}
 
