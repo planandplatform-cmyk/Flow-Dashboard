@@ -1,5 +1,6 @@
 "use server";
 
+import { friendlyDbError } from "@/lib/supabase/errors";
 import { refresh } from "next/cache";
 import { cleanCopy } from "@/lib/commentary/copy";
 import { auditAction, authorizeStaffForClient } from "@/lib/data/authorize";
@@ -125,7 +126,7 @@ export async function saveReportUpload(slug: string, form: FormData): Promise<Re
     });
     if (error) {
       const done = saved.map((s) => s.platform).join(", ");
-      return { status: "error", message: `${SOURCE_LABELS[part.platform]} was not saved: ${error.message}.${done ? ` Already saved: ${done} (see Upload history).` : ""}` };
+      return { status: "error", message: `${SOURCE_LABELS[part.platform]} was not saved. ${friendlyDbError(error.message)}${done ? ` Already saved: ${done} (see Upload history).` : ""}` };
     }
     const res = data as { inserted: number; updated: number };
     saved.push({ platform: SOURCE_LABELS[part.platform], inserted: res.inserted, updated: res.updated });

@@ -1,5 +1,6 @@
 "use server";
 
+import { friendlyDbError } from "@/lib/supabase/errors";
 import { refresh } from "next/cache";
 import { authorizeStaffForClient } from "@/lib/data/authorize";
 import type { UploadOverlap } from "@/lib/data/uploads";
@@ -165,7 +166,7 @@ export async function saveScreenshotUpload(
     p_period_end: reviewed.period.end,
     p_batch: result.batch,
   });
-  if (error) return { status: "error", message: `Nothing was saved. ${error.message}` };
+  if (error) return { status: "error", message: `Nothing was saved. ${friendlyDbError(error.message)}` };
   refresh();
   const res = data as { inserted: number; updated: number };
   return { status: "done", inserted: res.inserted, updated: res.updated };

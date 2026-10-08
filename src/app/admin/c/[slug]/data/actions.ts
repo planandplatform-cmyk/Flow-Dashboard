@@ -1,5 +1,6 @@
 "use server";
 
+import { friendlyDbError } from "@/lib/supabase/errors";
 import { refresh } from "next/cache";
 import { authorizeStaffForClient } from "@/lib/data/authorize";
 import type { Client } from "@/lib/data/portal";
@@ -144,7 +145,7 @@ export async function commitUpload(slug: string, form: FormData): Promise<Commit
   });
   if (error) {
     await supabase.storage.from("uploads").remove([storagePath]);
-    return { status: "error", message: `Nothing was saved. ${error.message}` };
+    return { status: "error", message: `Nothing was saved. ${friendlyDbError(error.message)}` };
   }
   refresh();
   const res = data as { inserted: number; updated: number };
@@ -197,7 +198,7 @@ export async function saveManualEntry(slug: string, _prev: ManualState, form: Fo
     p_period_end: built.period.end,
     p_batch: built.batch,
   });
-  if (error) return { status: "error", message: `Nothing was saved. ${error.message}` };
+  if (error) return { status: "error", message: `Nothing was saved. ${friendlyDbError(error.message)}` };
   refresh();
   return { status: "done", message: "Saved. It appears in the upload history and can be rolled back from there." };
 }
