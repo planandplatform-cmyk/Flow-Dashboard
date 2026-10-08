@@ -87,6 +87,32 @@ For numbers that are easier to screenshot or save as a PDF than export as a spre
 Who reads what: CSV and Excel files on **Upload a file** are read by fixed rules, with no AI.
 Only this tab uses AI, and nothing it reads is saved until a person checks it.
 
+## Importing a full past report
+
+For months you already reported on: **Manage data > Import a full report**. Drop in the whole
+monthly report PDF (website, social and ads together, up to 3.5 MB) and press **Read report**.
+
+- AI reads every section and files each number under its platform for the report's month:
+  totals, website tables (sessions by channel, landing pages, top pages), audience and follower
+  shares, LinkedIn competitor rankings.
+- Everything is shown grouped by platform with the page it came from. Fix or untick anything,
+  confirm the month, then **Save checked values**.
+- One upload is saved per platform, so each shows in Upload history and can be rolled back
+  on its own. Importing the same month again replaces the earlier numbers.
+- Tick **Save the report's summary as this month's commentary** to keep the report's own
+  headline, summary and conclusion as a commentary draft (only if the month has none yet).
+
+Rates and percent changes in the report are skipped on purpose; the portal recalculates them.
+A long report takes one to three minutes to read.
+
+## LinkedIn competitor comparison
+
+LinkedIn page analytics > **Competitors**: screenshot the Total followers, New followers, Total
+post metrics and Total engagement metrics lists and add them on **Screenshots & PDFs** with
+LinkedIn chosen. Each company's value and change are read, with your page marked. They can also
+be typed on **Enter manually** (metric "Posts", "Engagements"..., breakdown "Competitor" or "Your
+page", and the company name). Set the dates to the period LinkedIn shows, e.g. the last 30 days.
+
 What makes screenshots and PDFs read well:
 
 - Set the date range in the platform first and keep the dates visible. If the screen only says

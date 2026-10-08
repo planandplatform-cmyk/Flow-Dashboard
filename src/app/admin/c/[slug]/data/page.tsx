@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AdminClientTop } from "@/components/admin-client-top";
+import { Notice } from "@/components/form";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
 import { getClientBySlug, getViewer, isFfm } from "@/lib/data/portal";
@@ -13,14 +14,19 @@ import { METRICS } from "@/lib/metrics/config";
 import { DATA_SOURCES, SOCIAL_SOURCES, SOURCE_LABELS } from "@/lib/metrics/types";
 import { ManualEntry, type MetricOption } from "./manual-entry";
 import { UploadHistory } from "./upload-history";
+import { ReportImport } from "./report-import";
 import { ScreenshotPanel } from "./screenshot-panel";
 import { UploadPanel } from "./upload-panel";
 
 export const metadata: Metadata = { title: "Manage data" };
 
+// Reading a long report with AI can take a few minutes.
+export const maxDuration = 300;
+
 const TABS = [
   { id: "upload", label: "Upload a file" },
   { id: "screenshots", label: "Screenshots & PDFs" },
+  { id: "report", label: "Import a full report" },
   { id: "manual", label: "Enter manually" },
   { id: "history", label: "Upload history" },
 ] as const;
@@ -86,6 +92,14 @@ async function DataPageContent(props: PageProps<"/admin/c/[slug]/data">) {
         <div className="mt-8">
           {tab === "upload" && <UploadPanel slug={client.slug} clientName={client.name} sources={sources} />}
           {tab === "screenshots" && <ScreenshotPanel slug={client.slug} clientName={client.name} configured={screenshotReadingConfigured()} enabled={client.enabled_sources} />}
+          {tab === "report" &&
+            (screenshotReadingConfigured() ? (
+              <ReportImport slug={client.slug} clientName={client.name} />
+            ) : (
+              <Notice tone="info" title="Report reading is not set up yet">
+                Add an Anthropic API key as ANTHROPIC_API_KEY in the Vercel environment variables, then redeploy.
+              </Notice>
+            ))}
           {tab === "manual" && (
             <ManualEntry
               slug={client.slug}

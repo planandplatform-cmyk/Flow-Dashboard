@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { SOURCE_LABELS } from "@/lib/metrics/types";
+import { reportGuide, reportSchema, type ReportExtraction } from "./report-import";
 import { extractionSchema, metricGuide, type Extraction, type ScreenshotPlatform } from "./screenshot";
 
 const MODEL = "claude-opus-5-5";
@@ -82,6 +83,64 @@ Report the date range shown in the files as exact dates if visible. If only a re
 
   if (response.stop_reason === "refusal") throw new ScreenshotReadError("The AI declined to read these files.");
   if (response.stop_reason === "max_tokens") throw new ScreenshotReadError("These files had too much on them to read at once. Upload fewer at a time, or only the pages with the numbers.");
+  if (!response.parsed_output) throw new ScreenshotReadError("The AI's answer could not be understood. Try again.");
+  return response.parsed_output;
+}
+
+const REPORT_SYSTEM = `You transcribe a complete monthly analytics report (website, social media, ads) into structured data for a marketing agency's reporting portal.
+
+Report only numbers printed in the report, exactly as printed. Never estimate or calculate. Each metric belongs to the platform section it appears in; use the metric keys for that platform only. If a metric appears in several places with the same value (summary page and detail page), report it once.
+
+Skip percent changes, prior-period values, and rates such as engagement rate, CTR, DAU/MAU, or cost per result: the portal calculates rates itself. Durations are reported in minutes.
+
+For LinkedIn, report Reactions, Comments, and Reposts as their own keys; report New followers as li_net_new_followers and Total followers as li_followers. For website tables, report each row of sessions by channel, sessions by landing page, and views by page path in table_rows.
+
+Copy the report's own headline or key takeaway, executive summary, and conclusion into commentary, word for word.`;
+
+/** Read a full multi-channel report PDF for the client's channels. */
+export async function readReport(file: ScreenshotImage, platforms: ScreenshotPlatform[], today: string): Promise<ReportExtraction> {
+  const client = new Anthropic();
+  const instructions = `Today is ${today}. The client's channels: ${platforms.map((p) => SOURCE_LABELS[p]).join(", ")}. Ignore sections for other channels and say so in notes.
+
+Metric keys you may report, by platform, with the labels each platform uses:
+${reportGuide(platforms)}
+
+Also report audience and discovery shares as percentages in breakdowns with their platform (age, gender, country, city, language, job function, seniority, industry, company size, where views came from, followers vs non-followers, engagement or views by content type). Website users by country go under platform ga4 as country shares. LinkedIn follower or visitor tables with counts and percentages: report the percentages.
+
+LinkedIn competitor rankings (new followers, total followers, posts, engagements, each with a change) go in competitors.
+
+Report the reporting period as exact dates.`;
+
+  let response;
+  try {
+    response = await client.beta.messages.parse({
+      model: MODEL,
+      max_tokens: 20000,
+      output_config: { effort: "high", format: betaZodOutputFormat(reportSchema(platforms)) },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system: REPORT_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: [
+            file.mediaType === "application/pdf"
+              ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: file.data } }
+              : { type: "image", source: { type: "base64", media_type: file.mediaType, data: file.data } },
+            { type: "text", text: instructions },
+          ],
+        },
+      ],
+    });
+  } catch (error) {
+    if (error instanceof Anthropic.AuthenticationError) throw new ScreenshotReadError("The Anthropic API key is missing or invalid.");
+    if (error instanceof Anthropic.RateLimitError) throw new ScreenshotReadError("Too many requests right now. Wait a minute and try again.");
+    if (error instanceof Anthropic.BadRequestError) throw new ScreenshotReadError(`The report could not be read: ${error.message}`);
+    if (error instanceof Anthropic.APIError) throw new ScreenshotReadError(`The AI service returned an error (${error.status}). Try again.`);
+    throw new ScreenshotReadError("Could not reach the AI service. Try again.");
+  }
+  if (response.stop_reason === "refusal") throw new ScreenshotReadError("The AI declined to read this report.");
+  if (response.stop_reason === "max_tokens") throw new ScreenshotReadError("This report has too much in it to read at once. Split it into the website and social pages and import each.");
   if (!response.parsed_output) throw new ScreenshotReadError("The AI's answer could not be understood. Try again.");
   return response.parsed_output;
 }

@@ -199,7 +199,8 @@ export interface ReviewedScreenshotData {
   platform: ScreenshotPlatform;
   period: Period;
   campaignName: string | null;
-  metrics: { key: string; value: number }[];
+  /** With dimension and bucket, a row of a breakdown table (sessions by channel...). */
+  metrics: { key: string; value: number; dimension?: string; bucket?: string }[];
   breakdowns: { type: BreakdownType; bucket: string; percent: number }[];
   competitors?: CompetitorRow[];
 }
@@ -253,7 +254,20 @@ export function buildScreenshotResult(data: ReviewedScreenshotData): ParseResult
 
   const allowed = new Set(metricKeysFor(platform));
   const values = new Map<string, number>();
-  for (const m of data.metrics) {
+  for (const m of data.metrics.filter((x) => x.dimension)) {
+    const bucket = (m.bucket ?? "").trim().slice(0, 200);
+    if (!allowed.has(m.key) || !(METRICS[m.key]?.dimensions ?? []).includes(m.dimension!) || !bucket) {
+      b.error(`${labelFor(m.key)} by ${m.dimension}: check the row "${bucket || "(blank)"}".`);
+      continue;
+    }
+    if (!Number.isFinite(m.value) || m.value < 0) {
+      b.error(`${labelFor(m.key)} for ${bucket}: enter a number.`);
+      continue;
+    }
+    b.period(platform, m.key, period.start, period.end, m.value, m.dimension!, bucket);
+    b.rowsRead++;
+  }
+  for (const m of data.metrics.filter((x) => !x.dimension)) {
     if (!allowed.has(m.key)) {
       b.error(`"${m.key}" is not a ${platform} metric.`);
       continue;
