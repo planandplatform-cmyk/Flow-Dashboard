@@ -42,6 +42,9 @@ export const TREND_KEYS = [
   "ads_leads",
   "ads_spend",
   "ads_cpl",
+  "gads_conversions",
+  "gads_spend",
+  "gads_cpa",
   "shop_total_sales",
   "shop_orders",
 ];

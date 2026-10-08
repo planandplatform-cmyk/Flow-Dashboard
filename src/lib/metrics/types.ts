@@ -3,6 +3,7 @@ export const DATA_SOURCES = [
   "meta_facebook",
   "meta_instagram",
   "meta_ads",
+  "google_ads",
   "shopify",
   "tiktok",
   "linkedin",
@@ -18,6 +19,7 @@ export const SOURCE_LABELS: Record<DataSource, string> = {
   shopify: "Shopify",
   tiktok: "TikTok",
   linkedin: "LinkedIn",
+  google_ads: "Google Ads",
 };
 
 export const SOCIAL_SOURCES = ["meta_facebook", "meta_instagram", "tiktok", "linkedin"] as const;

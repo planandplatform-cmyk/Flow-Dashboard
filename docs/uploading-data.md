@@ -55,6 +55,17 @@ Include the columns **Amount spent**, **Impressions**, **Reach**, **Link clicks*
 Reach can't be added up across campaigns (the same person can see several campaigns). With more
 than one campaign, export at account level or enter total reach with **Enter manually**.
 
+### Google Ads
+Google Ads > **Campaigns** > set the date range > **Download** (the arrow above the table) > **CSV**
+or **Excel .csv**. Keep the Cost, Impr., Clicks, Conversions and Conv. value columns.
+
+- Without a Day segment: totals for the date range shown at the top of the file, per campaign.
+- With **Segment > Time > Day**: daily numbers, so any date range works.
+
+Google's "Total:" rows are skipped; account totals are added up from the campaigns. CTR, Avg.
+CPC, Cost / conv., Conv. rate and ROAS are recalculated by the portal, never taken from the
+file. Google Ads screenshots and full reports that include Google Ads can also be read with AI.
+
 ### Shopify
 Shopify admin > **Analytics > Reports** > open a report > set the dates > **Export**.
 Useful reports: Total sales over time (by day), Sales by channel, Sales by product,

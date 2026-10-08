@@ -116,7 +116,11 @@ export function buildMonthFacts(input: FactsInput): MonthFacts {
     }
     sections.push({
       id: source,
-      label: isAds ? "Meta Ads (paid)" : `${SOURCE_LABELS[source]}${source === "ga4" || source === "shopify" ? "" : " (organic)"}`,
+      label: isAds
+        ? "Meta Ads (paid)"
+        : source === "google_ads"
+          ? "Google Ads (paid)"
+          : `${SOURCE_LABELS[source]}${source === "ga4" || source === "shopify" ? "" : " (organic)"}`,
       window: isAds ? formatRange(window) : formatMonth(range.start),
       metrics,
       details,

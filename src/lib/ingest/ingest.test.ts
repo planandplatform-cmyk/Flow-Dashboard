@@ -139,6 +139,33 @@ describe("Meta Ads", () => {
   });
 });
 
+describe("Google Ads", () => {
+  it("reads a campaign export with the date range in its header", () => {
+    const r = parse("google-ads-campaigns.csv");
+    expect(r.errors).toEqual([]);
+    expect(r.parserId).toBe("google_ads");
+    expect(r.batch.period.every((p) => p.source === "google_ads" && p.period_start === "2026-07-01" && p.period_end === "2026-07-31")).toBe(true);
+    // Account totals are the sum of campaigns; Google's "Total:" rows are not double counted.
+    const account = (key: string) => r.batch.period.find((p) => p.metric_key === key && !p.dimension)?.value;
+    expect(account("gads_spend")).toBe(1314.15);
+    expect(account("gads_impressions")).toBe(42595);
+    expect(account("gads_clicks")).toBe(1013);
+    expect(account("gads_conversions")).toBe(40);
+    expect(account("gads_conversion_value")).toBe(8000);
+    expect(r.batch.period.find((p) => p.metric_key === "gads_spend" && p.dimension_value === "Storm Damage - PMax")?.value).toBe(445.11);
+    // Rates come from the parts, never from the CTR / CPC columns.
+    expect(r.batch.period.some((p) => /ctr|cpc|cpa/.test(p.metric_key))).toBe(false);
+  });
+
+  it("reads a daily export", () => {
+    const r = parse("google-ads-daily.csv");
+    expect(r.errors).toEqual([]);
+    const day1 = r.batch.daily.find((d) => d.metric_key === "gads_spend" && d.date === "2026-07-01" && !d.dimension);
+    expect(day1?.value).toBe(41.9);
+    expect(r.batch.daily.filter((d) => d.metric_key === "gads_clicks" && !d.dimension).reduce((a, d) => a + d.value, 0)).toBe(54);
+  });
+});
+
 describe("Shopify", () => {
   it("reads total sales over time", () => {
     const r = parse("shopify-sales-over-time.csv");

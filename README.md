@@ -106,7 +106,7 @@ in the Supabase SQL Editor.
 ## Adding a client
 
 1. On the client list, **+ New client**: name, market, time zone, and the channels this client
-   uses (any mix of Website, Facebook, Instagram, Meta Ads, Shopify, TikTok, LinkedIn).
+   uses (any mix of Website, Facebook, Instagram, Meta Ads, Google Ads, Shopify, TikTok, LinkedIn).
 2. On the next screen, **invite** the people from that business. Each gets an email, signs in
    with their own address, and only ever sees that client. One person can be given access to
    several clients (an owner with two businesses sees a list to choose from).

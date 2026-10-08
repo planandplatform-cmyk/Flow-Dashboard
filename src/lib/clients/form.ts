@@ -20,6 +20,7 @@ export const SOURCE_DESCRIPTIONS: Record<DataSource, string> = {
   meta_facebook: "Facebook Page: views, engagement, followers",
   meta_instagram: "Instagram account: views, engagement, followers",
   meta_ads: "Meta Ads: leads, spend, reach, cost per lead",
+  google_ads: "Google Ads: conversions, cost, clicks, cost per conversion",
   shopify: "Shopify store: sales, orders, customers",
   tiktok: "TikTok account: video views, engagement, followers",
   linkedin: "LinkedIn company page: impressions, engagement, followers",

@@ -13,7 +13,7 @@ import { BatchBuilder } from "./batch";
 import { num, parseDate } from "./cells";
 import type { BreakdownType, ParseResult, Period } from "./types";
 
-export const SCREENSHOT_PLATFORMS = ["ga4", "meta_facebook", "meta_instagram", "meta_ads", "linkedin"] as const;
+export const SCREENSHOT_PLATFORMS = ["ga4", "meta_facebook", "meta_instagram", "meta_ads", "google_ads", "linkedin"] as const;
 export type ScreenshotPlatform = (typeof SCREENSHOT_PLATFORMS)[number];
 
 /** Files per batch. Claude reads up to 20 images at full detail, and PDFs up to about 100 pages. */
@@ -77,6 +77,13 @@ const LABELS: Record<ScreenshotPlatform, Record<string, string[]>> = {
     ads_impressions: ["Impressions"],
     ads_clicks: ["Link clicks", "Clicks (all) if no link clicks are shown"],
     ads_leads: ["Leads", "Results (only when the result type is leads)"],
+  },
+  google_ads: {
+    gads_spend: ["Cost", "Spend"],
+    gads_impressions: ["Impr.", "Impressions"],
+    gads_clicks: ["Clicks"],
+    gads_conversions: ["Conversions", "Conv."],
+    gads_conversion_value: ["Conv. value", "Conversion value"],
   },
   linkedin: {
     li_impressions: ["Impressions"],
@@ -143,7 +150,7 @@ export function extractionSchema(platform: ScreenshotPlatform) {
   const keys = metricKeysFor(platform) as [string, ...string[]];
   return z.object({
     is_analytics_screenshot: z.boolean().describe("False if no screenshot or PDF page is an analytics report for this platform."),
-    platform_seen: z.enum(["google_analytics", "facebook", "instagram", "meta_ads", "linkedin", "other", "unclear"]),
+    platform_seen: z.enum(["google_analytics", "facebook", "instagram", "meta_ads", "google_ads", "linkedin", "other", "unclear"]),
     date_range: z
       .object({
         start: z.string().describe("YYYY-MM-DD"),
@@ -248,7 +255,7 @@ export function buildScreenshotResult(data: ReviewedScreenshotData): ParseResult
   const { platform, period } = data;
 
   if (!SCREENSHOT_PLATFORMS.includes(platform)) {
-    b.error("Choose Google Analytics, Facebook, Instagram, Meta Ads or LinkedIn.");
+    b.error("Choose Google Analytics, Facebook, Instagram, Meta Ads, Google Ads or LinkedIn.");
     return b.finalize(parser);
   }
   if (!ISO.test(period.start) || !ISO.test(period.end) || period.end < period.start) {
@@ -393,7 +400,7 @@ export function reviewExtraction(
   if (!extraction.is_analytics_screenshot) {
     errors.push("These do not look like analytics reports for the chosen platform.");
   }
-  const expected = { ga4: "google_analytics", meta_facebook: "facebook", meta_instagram: "instagram", meta_ads: "meta_ads", linkedin: "linkedin" }[platform];
+  const expected = { ga4: "google_analytics", meta_facebook: "facebook", meta_instagram: "instagram", meta_ads: "meta_ads", google_ads: "google_ads", linkedin: "linkedin" }[platform];
   if (extraction.platform_seen !== expected && extraction.platform_seen !== "unclear") {
     warnings.push(`These look like ${extraction.platform_seen.replace("_", " ")}, not the platform you chose. Check before saving.`);
   }

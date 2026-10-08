@@ -15,7 +15,7 @@ import { CommentaryEditor } from "./editor";
 export const metadata: Metadata = { title: "Commentary" };
 
 /** Channels the report writes a narrative for, in report order. */
-const NARRATIVE_SOURCES: DataSource[] = ["meta_facebook", "meta_instagram", "tiktok", "linkedin", "ga4", "meta_ads"];
+const NARRATIVE_SOURCES: DataSource[] = ["meta_facebook", "meta_instagram", "tiktok", "linkedin", "ga4", "meta_ads", "google_ads"];
 const NOTE_LABELS: Record<(typeof NOTE_SECTIONS)[number], string> = {
   content: "Content and engagement",
   demographics: "Audience and demographics",

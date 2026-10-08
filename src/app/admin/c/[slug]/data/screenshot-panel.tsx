@@ -16,6 +16,7 @@ const PLATFORMS: { value: ScreenshotPlatform; label: string }[] = [
   { value: "meta_facebook", label: "Facebook" },
   { value: "meta_instagram", label: "Instagram" },
   { value: "meta_ads", label: "Meta Ads" },
+  { value: "google_ads", label: "Google Ads" },
   { value: "linkedin", label: "LinkedIn" },
 ];
 

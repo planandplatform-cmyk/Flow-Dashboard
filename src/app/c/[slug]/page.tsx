@@ -18,7 +18,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, DEMOGRAPHICS, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel } from "@/lib/report/load";
+import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel } from "@/lib/report/load";
 import { describeRange, periodQuery } from "@/lib/report/period";
 
 export const metadata: Metadata = { title: "Performance Report" };
@@ -65,6 +65,8 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     social,
     hasWebsite,
     hasAds,
+    hasGoogleAds,
+    googleCampaigns,
     momKeys,
     months,
     trends,
@@ -489,6 +491,60 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 ])}
               />
             </div>
+          </Section>
+        )}
+
+        {/* Google Ads */}
+        {hasGoogleAds && (
+          <Section id="google-ads" number={next()} title="Google Ads Performance">
+            <div className="relative overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-teal-950 to-surface p-6 sm:p-8">
+              <p className="text-xs font-semibold uppercase tracking-widest text-teal">Google Ads (paid) · {describeRange(range)}</p>
+              <h3 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
+                {narratives.google_ads?.headline ??
+                  (val("gads_conversions") !== null
+                    ? `${formatMetric("gads_conversions", val("gads_conversions"))} Conversions from ${formatMetric("gads_clicks", val("gads_clicks"))} Clicks`
+                    : `${formatMetric("gads_clicks", val("gads_clicks"))} Clicks`)}
+              </h3>
+              {narratives.google_ads?.body && <p className="mt-3 max-w-3xl text-sm leading-relaxed text-fg-secondary sm:text-base">{narratives.google_ads.body}</p>}
+            </div>
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {["gads_conversions", "gads_spend", "gads_cpa"].map((k) => (
+                <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} />
+              ))}
+            </div>
+            <div className="mt-6">
+              <DataTable
+                caption="Google Ads metrics explained"
+                columns={[{ label: "Metric" }, { label: "Value", align: "right" }, { label: "What it means" }]}
+                rows={GOOGLE_ADS_TABLE.filter(({ key }) => val(key) !== null).map(({ key, meaning }) => [
+                  <MetricLabel key={key} metricKey={key} />,
+                  <span key={`${key}-v`} className="font-semibold text-teal">{formatMetric(key, val(key))}</span>,
+                  meaning,
+                ])}
+              />
+            </div>
+            {googleCampaigns.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">By campaign</h3>
+                <DataTable
+                  caption="Google Ads by campaign"
+                  columns={[
+                    { label: "Campaign" },
+                    { label: <MetricLabel metricKey="gads_spend" />, align: "right" },
+                    { label: <MetricLabel metricKey="gads_clicks" />, align: "right" },
+                    { label: <MetricLabel metricKey="gads_conversions" />, align: "right" },
+                    { label: <MetricLabel metricKey="gads_cpa" />, align: "right" },
+                  ]}
+                  rows={googleCampaigns.map((c) => [
+                    <span key={c.name} className="text-fg">{c.name}</span>,
+                    formatMetric("gads_spend", c.spend),
+                    formatMetric("gads_clicks", c.clicks),
+                    formatMetric("gads_conversions", c.conversions),
+                    formatMetric("gads_cpa", c.cpa),
+                  ])}
+                />
+              </div>
+            )}
           </Section>
         )}
 

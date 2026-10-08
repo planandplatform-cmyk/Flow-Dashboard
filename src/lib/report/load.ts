@@ -47,6 +47,9 @@ export const MOM_KEYS = [
   "ga4_sessions",
   "ga4_key_events",
   "ga4_engagement_rate",
+  "gads_conversions",
+  "gads_clicks",
+  "gads_cpa",
   "shop_total_sales",
   "shop_orders",
 ];
@@ -58,6 +61,20 @@ export const ADS_TABLE: { key: string; meaning: string }[] = [
   { key: "ads_frequency", meaning: "Average number of times each person saw the ads" },
   { key: "ads_ctr", meaning: "Share of people who clicked the ad after seeing it" },
   { key: "ads_cpl", meaning: "Average cost for each lead the campaign generated" },
+];
+
+/** Google Ads metrics table: metric and what it means. */
+export const GOOGLE_ADS_TABLE: { key: string; meaning: string }[] = [
+  { key: "gads_conversions", meaning: "Calls, form fills, or other actions counted as conversions" },
+  { key: "gads_spend", meaning: "Total spent on Google Ads in the period" },
+  { key: "gads_clicks", meaning: "Times people clicked an ad" },
+  { key: "gads_impressions", meaning: "Times the ads were shown" },
+  { key: "gads_ctr", meaning: "Share of people who clicked after seeing an ad" },
+  { key: "gads_cpc", meaning: "Average cost of each click" },
+  { key: "gads_conversion_rate", meaning: "Share of clicks that became a conversion" },
+  { key: "gads_cpa", meaning: "Average cost of each conversion" },
+  { key: "gads_conversion_value", meaning: "Value of the conversions, where tracked" },
+  { key: "gads_roas", meaning: "Conversion value for every dollar spent" },
 ];
 
 export const FORMAT_LABELS: Record<string, string> = {
@@ -194,6 +211,19 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const notes = commentary?.section_notes ?? {};
   const hasWebsite = enabled.has("ga4") && val("ga4_sessions") !== null;
   const hasAds = adsRange !== null && val("ads_spend", adsRange) !== null;
+  const hasGoogleAds = enabled.has("google_ads") && (val("gads_spend") !== null || val("gads_clicks") !== null);
+  const googleCampaigns = hasGoogleAds
+    ? resolver.breakdown("gads_spend", "campaign", range).map(({ bucket, value }) => {
+        const f = { dimension: "campaign", value: bucket };
+        return {
+          name: bucket,
+          spend: value,
+          clicks: resolver.resolve("gads_clicks", range, f).value,
+          conversions: resolver.resolve("gads_conversions", range, f).value,
+          cpa: resolver.resolve("gads_cpa", range, f).value,
+        };
+      })
+    : [];
   const momKeys = compareRange ? MOM_KEYS.filter((k) => val(k) !== null && val(k, compareRange) !== null) : [];
 
   const trends = buildTrends(new MetricResolver(onlyEnabledSources(trendData, enabled), { prorate: false }), trendKeys, months, today, (k) => {
@@ -221,7 +251,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     { id: "audience", label: "Audience", show: showAudience },
     { id: "discovery", label: "Discovery", show: showDiscovery },
     { id: "video", label: "Video", show: showVideo },
-    { id: "ads", label: "Ads", show: hasAds },
+    { id: "ads", label: "Meta Ads", show: hasAds },
+    { id: "google-ads", label: "Google Ads", show: hasGoogleAds },
     { id: "mom", label: "Comparison", show: compareRange !== null && (momKeys.length > 0 || social.compareCards.length > 0) },
     { id: "trends", label: "Trends", show: trends.length > 0 },
   ].filter((n) => n.show);
@@ -274,6 +305,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     social,
     hasWebsite,
     hasAds,
+    hasGoogleAds,
+    googleCampaigns,
     momKeys,
     months,
     trends,

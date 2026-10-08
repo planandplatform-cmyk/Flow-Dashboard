@@ -8,7 +8,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatDelta, formatMetric, formatPctChange, formatValue } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, DEMOGRAPHICS, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, type Report } from "@/lib/report/load";
+import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, type Report } from "@/lib/report/load";
 import { PLATFORM_COLORS, type Bar, type CompetitorTable } from "@/lib/report/social";
 import { describeRange } from "@/lib/report/period";
 import type { TrendSeries } from "@/lib/report/trends";
@@ -418,6 +418,58 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                 highlight={1}
               />
             </View>
+          </View>
+        )}
+
+        {/* Google Ads */}
+        {r.hasGoogleAds && (
+          <View style={s.section}>
+            <View wrap={false}>
+              <Heading s={s} n={next()} title="Google Ads Performance" />
+              <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: t.accent }]}>
+                <Text style={s.eyebrow}>Google Ads (paid) · {describeRange(range)}</Text>
+                <Text style={s.h3}>
+                  {narratives.google_ads?.headline ??
+                    (val("gads_conversions") !== null
+                      ? `${formatMetric("gads_conversions", val("gads_conversions"))} Conversions from ${formatMetric("gads_clicks", val("gads_clicks"))} Clicks`
+                      : `${formatMetric("gads_clicks", val("gads_clicks"))} Clicks`)}
+                </Text>
+                {narratives.google_ads?.body && <Text style={[s.body, { marginTop: 3 }]}>{narratives.google_ads.body}</Text>}
+              </View>
+              <View style={[s.row, { marginTop: 8 }]}>
+                {["gads_conversions", "gads_spend", "gads_cpa"].map((k) => (
+                  <Kpi key={k} s={s} t={t} metricKey={k} value={val(k)} comparison={mom(k)} />
+                ))}
+              </View>
+            </View>
+            <View style={{ marginTop: 8 }} wrap={false}>
+              <Table
+                s={s}
+                t={t}
+                widths={[26, 18, 56]}
+                head={["Metric", "Value", "What it means"]}
+                rows={GOOGLE_ADS_TABLE.filter(({ key }) => val(key) !== null).map(({ key, meaning }) => [METRICS[key].label, formatMetric(key, val(key)), meaning])}
+                highlight={1}
+              />
+            </View>
+            {r.googleCampaigns.length > 0 && (
+              <View style={{ marginTop: 8 }} wrap={false}>
+                <Text style={[s.label, { marginBottom: 4 }]}>By campaign</Text>
+                <Table
+                  s={s}
+                  t={t}
+                  widths={[40, 15, 15, 15, 15]}
+                  head={["Campaign", "Cost", "Clicks", "Conversions", "Cost per conv."]}
+                  rows={r.googleCampaigns.map((c) => [
+                    c.name,
+                    formatMetric("gads_spend", c.spend),
+                    formatMetric("gads_clicks", c.clicks),
+                    formatMetric("gads_conversions", c.conversions),
+                    formatMetric("gads_cpa", c.cpa),
+                  ])}
+                />
+              </View>
+            )}
           </View>
         )}
 
