@@ -201,3 +201,48 @@ describe("per-client channels", () => {
     expect(r.resolve("ads_spend", day).value).toBeNull();
   });
 });
+
+describe("platform totals for slightly different dates", () => {
+  // Instagram's "last 30 days" export: Jun 30 to Jul 30.
+  const r = new MetricResolver({
+    daily: [],
+    period: [
+      { metric_key: "ig_views", period_start: "2026-06-30", period_end: "2026-07-30", value: 12024 },
+      { metric_key: "ig_viewers", period_start: "2026-06-30", period_end: "2026-07-30", value: 5159 },
+    ],
+  });
+  const july = { start: "2026-07-01", end: "2026-07-31" };
+
+  it("reports them as supplied for the month, with the source period", () => {
+    expect(r.resolve("ig_views", july)).toEqual({ value: 12024, estimated: false, sourcePeriod: { start: "2026-06-30", end: "2026-07-30" } });
+    expect(r.resolve("ig_viewers", july).value).toBe(5159);
+  });
+
+  it("does not leak a sliver into the neighboring month", () => {
+    expect(r.resolve("ig_views", { start: "2026-06-01", end: "2026-06-30" }).value).toBeNull();
+  });
+
+  it("still prorates for a custom range", () => {
+    const res = r.resolve("ig_views", { start: "2026-07-01", end: "2026-07-15" });
+    expect(res.estimated).toBe(true);
+    expect(res.value).toBeCloseTo((12024 * 15) / 31, 5);
+  });
+
+  it("formats watch time", async () => {
+    const { formatValue } = await import("./format");
+    expect(formatValue(298, "duration")).toBe("4h 58m");
+    expect(formatValue(45, "duration")).toBe("45m");
+  });
+});
+
+describe("monthly view without proration", () => {
+  const data = {
+    daily: [],
+    period: [{ metric_key: "li_impressions", period_start: "2026-07-31", period_end: "2026-08-04", value: 202 }],
+  };
+  it("leaves a short total that straddles month end out of the month", () => {
+    const july = { start: "2026-07-01", end: "2026-07-31" };
+    expect(new MetricResolver(data, { prorate: false }).resolve("li_impressions", july).value).toBeNull();
+    expect(new MetricResolver(data).resolve("li_impressions", july).estimated).toBe(true);
+  });
+});

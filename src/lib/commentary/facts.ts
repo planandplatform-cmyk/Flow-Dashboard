@@ -100,6 +100,14 @@ export function buildMonthFacts(input: FactsInput): MonthFacts {
 
     const details: string[] = [];
     if (isAds && input.ads!.campaigns.length) details.push(`Campaigns: ${input.ads!.campaigns.join(", ")}`);
+    if (source === "linkedin") {
+      for (const [metric, label] of [["engagements", "engagements"], ["posts", "posts"], ["followers", "total followers"]] as const) {
+        const rows = (["own_page", "competitor"] as const).flatMap((dimension) =>
+          resolver.breakdown(`li_comp_${metric}`, dimension, range).map((b) => `${b.bucket}${dimension === "own_page" ? " (client's page)" : ""} ${formatMetric(`li_comp_${metric}`, b.value)}`),
+        );
+        if (rows.length) details.push(`LinkedIn competitor comparison, ${label}: ${rows.join(", ")}`);
+      }
+    }
     if (source === "ga4") {
       const channels = resolver.breakdown("ga4_sessions", "channel", range).slice(0, 5);
       if (channels.length) details.push(`Sessions by channel: ${channels.map((c) => `${c.bucket} ${formatMetric("ga4_sessions", c.value)}`).join(", ")}`);

@@ -72,6 +72,7 @@ export type BreakdownType =
   | "follower_status"
   | "follower_status_engagement"
   | "format_engagement"
+  | "format_views"
   | "job_function"
   | "seniority"
   | "industry"

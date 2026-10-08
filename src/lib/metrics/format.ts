@@ -24,6 +24,12 @@ export function formatValue(value: number | null | undefined, format: MetricForm
       return Math.abs(value) >= 10_000 ? currencyWhole.format(value) : currency.format(value);
     case "multiplier":
       return `${value.toFixed(2)}x`;
+    case "duration": {
+      const minutes = Math.round(value);
+      const h = Math.floor(Math.abs(minutes) / 60);
+      const m = Math.abs(minutes) % 60;
+      return `${minutes < 0 ? "-" : ""}${h ? `${h}h ${m}m` : `${m}m`}`;
+    }
   }
 }
 

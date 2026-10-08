@@ -25,7 +25,7 @@ export function readPeriod(form: FormData): { start: string; end: string } | und
 
 export const BREAKDOWNS: BreakdownType[] = [
   "age", "gender", "country", "city", "language", "discovery_surface", "follower_status", "follower_status_engagement",
-  "format_engagement", "job_function", "seniority", "industry", "company_size",
+  "format_engagement", "format_views", "job_function", "seniority", "industry", "company_size",
 ];
 
 /** Build a batch from the manual entry form fields. */
@@ -41,10 +41,12 @@ export function buildManualBatch(form: FormData): { batch: IngestBatch; source: 
     if (!def || def.source === "combined" || def.aggregation.type === "ratio" || def.aggregation.type === "derived_sum") {
       return { error: "Choose a metric. Rates like engagement rate are calculated automatically and cannot be entered." };
     }
-    const raw = String(form.get("value") ?? "").replace(/[$,\s]/g, "");
-    const value = Number(raw);
+    const raw = String(form.get("value") ?? "").replace(/[$,%\s]/g, "");
+    let value = Number(raw);
     if (raw === "" || !Number.isFinite(value)) return { error: "Enter a number for the value." };
-    if (value < 0 && !key.endsWith("_net_new_followers")) return { error: "This metric cannot be negative." };
+    if (value < 0 && !key.endsWith("_net_new_followers") && !key.endsWith("_change")) return { error: "This metric cannot be negative." };
+    // Percentages are typed as shown (6.3 for 6.3%) and stored as fractions.
+    if (def.format === "percent") value /= 100;
     const dimension = String(form.get("dimension") ?? "").trim();
     const dimensionValue = String(form.get("dimensionValue") ?? "").trim();
     if (Boolean(dimension) !== Boolean(dimensionValue)) return { error: "Fill in both the breakdown and its value, or neither." };
@@ -79,7 +81,7 @@ export function buildManualBatch(form: FormData): { batch: IngestBatch; source: 
       seen.add(buckets[i].toLowerCase());
       total += pct;
       // Discovery and format mixes describe a period; demographics are a point in time.
-      const periodBased = ["discovery_surface", "follower_status", "follower_status_engagement", "format_engagement"].includes(type);
+      const periodBased = ["discovery_surface", "follower_status", "follower_status_engagement", "format_engagement", "format_views"].includes(type);
       b.snapshot({
         platform,
         snapshot_date: period.end,

@@ -276,6 +276,29 @@ export async function getTopPosts(clientId: string, range: DateRange, limit = 10
   return (data ?? []).map((p) => ({ ...p, views: p.views === null ? null : Number(p.views) })) as Post[];
 }
 
+/** Number of posts published in the range, per platform. */
+export async function getPostCounts(clientId: string, range: DateRange, platforms: DataSource[]): Promise<Partial<Record<DataSource, number>>> {
+  const inRange = (d: string) => d.slice(0, 10) >= range.start && d.slice(0, 10) <= range.end;
+  if (isDemoMode()) {
+    const posts = own((await demo()).posts, clientId) as unknown as Post[];
+    return Object.fromEntries(platforms.map((p) => [p, posts.filter((x) => x.platform === p && inRange(x.published_at)).length]));
+  }
+  const supabase = await createClient();
+  const counts = await Promise.all(
+    platforms.map(async (p) => {
+      const { count } = await supabase
+        .from("posts")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .eq("platform", p)
+        .gte("published_at", `${range.start}T00:00:00Z`)
+        .lte("published_at", `${range.end}T23:59:59Z`);
+      return [p, count ?? 0] as const;
+    }),
+  );
+  return Object.fromEntries(counts);
+}
+
 /** The latest snapshot of each breakdown type at or before the range end. */
 export async function getAudienceSnapshots(clientId: string, range: DateRange): Promise<AudienceSnapshot[]> {
   let rows: AudienceSnapshot[];

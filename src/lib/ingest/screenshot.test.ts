@@ -16,6 +16,7 @@ const extraction = (over: Partial<Extraction> = {}): Extraction => ({
     { type: "discovery_surface", bucket: "Feed", percent: 58, image_index: 2, confidence: "high" },
     { type: "discovery_surface", bucket: "Reels", percent: 36.4, image_index: 2, confidence: "high" },
   ],
+  competitors: [],
   campaign_name: null,
   notes: [],
   ...over,
@@ -187,5 +188,34 @@ describe("Google Analytics reports", () => {
   it("does not let the model report a rate", () => {
     const keys = extractionSchema("ga4").shape.metrics.element.shape.key.options;
     expect(keys).not.toContain("ga4_engagement_rate");
+  });
+});
+
+describe("LinkedIn competitor comparison", () => {
+  const competitors: Extraction["competitors"] = [
+    { company: "Diversified Energy Company", is_your_page: false, metric: "engagements", value: 2204, value_text: "2,204", change_percent: 105.8, image_index: 1, confidence: "high" },
+    { company: "MCWL Paladin Geological", is_your_page: true, metric: "engagements", value: 244, value_text: "244", change_percent: 31.9, image_index: 1, confidence: "high" },
+    { company: "Impac Exploration Services", is_your_page: false, metric: "posts", value: 0, value_text: "0", change_percent: null, image_index: 2, confidence: "high" },
+  ];
+
+  it("keeps competitor rows for LinkedIn and saves them by company", () => {
+    const review = reviewExtraction(extraction({ platform_seen: "linkedin", metrics: [], breakdowns: [], competitors }), "linkedin", undefined);
+    expect(review.competitors.map((c) => [c.company, c.own, c.metric, c.value, c.change])).toEqual([
+      ["Diversified Energy Company", false, "engagements", 2204, 105.8],
+      ["MCWL Paladin Geological", true, "engagements", 244, 31.9],
+      ["Impac Exploration Services", false, "posts", 0, null],
+    ]);
+    const r = buildScreenshotResult({ platform: "linkedin", period: july, campaignName: null, metrics: [], breakdowns: [], competitors: review.competitors });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const rows = r.batch.period.map((p) => [p.metric_key, p.dimension, p.dimension_value, p.value]);
+    expect(rows).toContainEqual(["li_comp_engagements", "own_page", "MCWL Paladin Geological", 244]);
+    expect(rows).toContainEqual(["li_comp_engagements_change", "competitor", "Diversified Energy Company", 1.058]);
+    expect(rows).toContainEqual(["li_comp_posts", "competitor", "Impac Exploration Services", 0]);
+    expect(rows.filter((x) => x[0] === "li_comp_posts_change")).toEqual([]);
+  });
+
+  it("ignores competitor rows for other platforms", () => {
+    expect(reviewExtraction(extraction({ competitors }), "meta_facebook", undefined).competitors).toEqual([]);
   });
 });

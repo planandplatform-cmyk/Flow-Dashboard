@@ -8,6 +8,7 @@ import { BigDelta, KpiTile } from "@/components/kpi";
 import { PdfMenu } from "@/components/pdf-menu";
 import { PeriodPicker } from "@/components/period-picker";
 import { PortalHeader } from "@/components/portal-header";
+import { BarList, CompetitorTable, PlatformChip } from "@/components/social";
 import { ReportSkeleton } from "@/components/skeleton";
 import { Card, DataTable, Prose, Section, ShareBars } from "@/components/section";
 import { TrendCharts } from "@/components/trend-charts";
@@ -17,7 +18,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, FORMAT_LABELS, loadReport, PLATFORM_TILES, snapshotsOf } from "@/lib/report/load";
+import { ADS_TABLE, DEMOGRAPHICS, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel } from "@/lib/report/load";
 import { describeRange, periodQuery } from "@/lib/report/period";
 
 export const metadata: Metadata = { title: "Performance Report" };
@@ -61,6 +62,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     snapshots,
     annotations,
     socials,
+    social,
     hasWebsite,
     hasAds,
     momKeys,
@@ -194,65 +196,77 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
 
         {/* 3. Social overview */}
         {socials.length > 0 && (
-          <Section id="social" number={next()} title="Social Media Performance Overview">
+          <Section
+            id="social"
+            number={next()}
+            title="Social Media Performance Overview"
+            intro="Each platform keeps its own metric names and the dates it supplied. Only measures with the same name are combined."
+          >
             <DataTable
               caption="Social media performance by platform"
               columns={[
                 { label: "Platform" },
-                { label: <MetricLabel metricKey="total_followers" label="Ending Audience" />, align: "right" },
-                { label: <MetricLabel metricKey="total_net_new_followers" label="Net New Followers" />, align: "right" },
-                { label: <MetricLabel metricKey="total_audience_reach" label="Total Views / Reach" />, align: "right" },
-                { label: <MetricLabel metricKey="total_interactions" label="Total Interactions" />, align: "right" },
+                { label: "Source period" },
+                { label: <MetricLabel metricKey="total_followers" label="Ending Audience" /> },
+                { label: <MetricLabel metricKey="total_net_new_followers" label="Net New Followers" /> },
+                { label: <MetricLabel metricKey="total_audience_reach" label="Visibility" /> },
+                { label: <MetricLabel metricKey="total_interactions" label="Engagement" /> },
+                { label: "Posts Published" },
               ]}
-              rows={socials.map((s) => {
-                const k = SOCIAL_OVERVIEW_KEYS[s];
-                const net = val(k.netNew);
-                return [
-                  SOURCE_LABELS[s],
-                  formatMetric(k.followers, val(k.followers)),
-                  net === null ? "N/A" : `${net > 0 ? "+" : ""}${formatMetric(k.netNew, net)}`,
-                  formatMetric(k.views, val(k.views)),
-                  formatMetric(k.interactions, val(k.interactions)),
-                ];
-              })}
-              footer={[
-                "Total Combined",
-                formatMetric("total_followers", val("total_followers")),
-                `+${formatMetric("total_net_new_followers", val("total_net_new_followers"))}`,
-                formatMetric("total_audience_reach", val("total_audience_reach")),
-                formatMetric("total_interactions", val("total_interactions")),
-              ]}
+              rows={social.overview.map((o) => [
+                <span key={o.source} className="font-medium text-fg">{o.label}</span>,
+                o.period,
+                o.audience,
+                o.netNew,
+                o.visibility,
+                o.engagement,
+                o.posts,
+              ])}
+              footer={
+                social.combined
+                  ? ["Combined", social.combined.note, "", "", social.combined.views, social.combined.interactions, ""]
+                  : undefined
+              }
             />
+            {social.visibilityBars.length > 1 && (
+              <Card className="mt-6 p-5">
+                <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">Supplied visibility measures by platform</h3>
+                <BarList bars={social.visibilityBars} />
+                {social.visibilityNote && <p className="mt-4 text-xs text-fg-muted">{social.visibilityNote}</p>}
+              </Card>
+            )}
           </Section>
         )}
 
         {/* 4. Platform breakdown */}
         {socials.length > 0 && (
           <Section id="platforms" number={next()} title="Platform Performance Breakdown">
-            <div className="space-y-10">
-              {socials.map((s, i) => {
-                const cfg = PLATFORM_TILES[s];
-                const narrative = narratives[s];
-                const [viewsKey, intKey] = cfg.headline;
-                return (
-                  <div key={s}>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-teal">
-                      {i + 1} · {SOURCE_LABELS[s]}
-                    </p>
-                    <h3 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
-                      {narrative?.headline ??
-                        `${formatMetric(viewsKey, val(viewsKey))} ${METRICS[viewsKey].label}, ${formatMetric(intKey, val(intKey))} ${METRICS[intKey].label}`}
-                    </h3>
-                    {narrative?.body && <p className="mt-3 max-w-3xl text-sm leading-relaxed text-fg-secondary sm:text-base">{narrative.body}</p>}
-                    <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      {cfg.keys.map((k) => (
-                        <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} />
-                      ))}
-                    </div>
+            <div className="space-y-6">
+              {social.platforms.map((p) => (
+                <Card key={p.source} className="border-l-4 border-l-teal p-5 sm:p-6">
+                  <PlatformChip source={p.source} label={p.label} />
+                  <h3 className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">{p.headline}</h3>
+                  {p.body && <p className="mt-2 max-w-3xl text-sm leading-relaxed text-fg-secondary sm:text-base">{p.body}</p>}
+                  {p.sourcePeriod && <p className="mt-2 text-xs text-fg-muted">Platform totals for {p.sourcePeriod}, as supplied.</p>}
+                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {p.tiles.map((t) => (
+                      <KpiTile key={t.key} metricKey={t.key} value={t.numeric} comparison={t.comparison} caption={t.caption ?? undefined} />
+                    ))}
                   </div>
-                );
-              })}
+                  {p.missingNote && <p className="mt-4 text-xs text-fg-muted">{p.missingNote}</p>}
+                </Card>
+              ))}
             </div>
+            {social.competitors && (
+              <div className="mt-8">
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <PlatformChip source="linkedin" label="LinkedIn" />
+                  <h3 className="text-lg font-semibold">Competitor comparison</h3>
+                  <span className="text-xs text-fg-muted">As shown by LinkedIn for {social.competitors.period}</span>
+                </div>
+                <CompetitorTable table={social.competitors} />
+              </div>
+            )}
           </Section>
         )}
 
@@ -312,30 +326,44 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         {/* 5. Content */}
         {showContent && (
           <Section id="content" number={next()} title="Content and Engagement Analysis" intro={notes.content}>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
-              {posts.length > 0 && (
-                <DataTable
-                  caption="Top posts by views"
-                  columns={[{ label: "Platform" }, { label: "Format" }, { label: "Post" }, { label: "Views", align: "right" }]}
-                  rows={posts.map((p) => [
-                    SOURCE_LABELS[p.platform],
-                    FORMAT_LABELS[p.format] ?? p.format,
-                    p.permalink ? (
-                      <a key={p.external_id} href={p.permalink} target="_blank" rel="noreferrer" className="text-fg hover:text-teal">
-                        {p.summary}
-                      </a>
-                    ) : (
-                      <span key={p.external_id} className="text-fg">{p.summary}</span>
-                    ),
-                    formatMetric("ig_views", p.views),
-                  ])}
-                />
-              )}
+            {posts.length > 0 && (
+              <DataTable
+                caption="Top posts by views"
+                columns={[
+                  { label: "Rank" },
+                  { label: "Platform" },
+                  { label: "Published" },
+                  { label: "Format" },
+                  { label: "Post" },
+                  { label: "Views", align: "right" },
+                ]}
+                rows={posts.map((p, i) => [
+                  String(i + 1),
+                  SOURCE_LABELS[p.platform],
+                  p.published_at ? formatDay(p.published_at.slice(0, 10)) : "Not available",
+                  FORMAT_LABELS[p.format] ?? p.format,
+                  p.permalink ? (
+                    <a key={p.external_id} href={p.permalink} target="_blank" rel="noreferrer" className="text-fg hover:text-teal">
+                      {p.summary}
+                    </a>
+                  ) : (
+                    <span key={p.external_id} className="text-fg">{p.summary}</span>
+                  ),
+                  formatMetric("ig_views", p.views),
+                ])}
+              />
+            )}
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {social.contentTypes.map((c) => (
+                <Card key={c.title} className="p-5">
+                  <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">{c.title}</h3>
+                  <BarList bars={c.bars} />
+                  {c.note && <p className="mt-4 text-xs text-fg-muted">{c.note}</p>}
+                </Card>
+              ))}
               {SOCIAL_SOURCES.filter((s) => snapshotsOf(snapshots, s, "format_engagement").length > 0).map((s) => (
                 <Card key={s} className="p-5">
-                  <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">
-                    {SOURCE_LABELS[s]} engagement by format
-                  </h3>
+                  <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">{SOURCE_LABELS[s]} engagement by format</h3>
                   <ShareBars items={snapshotsOf(snapshots, s, "format_engagement")} />
                 </Card>
               ))}
@@ -348,27 +376,38 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
           <Section id="audience" number={next()} title="Audience Growth and Demographics" intro={notes.demographics}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {SOCIAL_SOURCES.flatMap((s) =>
-                (["age", "gender", "country", "language"] as const)
-                  .filter((t) => snapshotsOf(snapshots, s, t).length > 0)
-                  .map((t) => (
-                    <Card key={`${s}-${t}`} className="p-5">
-                      <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">
-                        {SOURCE_LABELS[s]} audience by {t === "age" ? "age range" : t === "country" ? "top countries" : t === "language" ? "top languages" : t}
-                      </h3>
-                      <ShareBars
-                        items={snapshotsOf(snapshots, s, t).sort((a, b) => (t === "age" ? a.bucket.localeCompare(b.bucket) : b.share - a.share))}
-                      />
-                    </Card>
-                  )),
+                DEMOGRAPHICS.filter((d) => snapshotsOf(snapshots, s, d.type).length > 0).map((d) => (
+                  <Card key={`${s}-${d.type}`} className="p-5">
+                    <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">
+                      {SOURCE_LABELS[s]} audience by {d.title}
+                    </h3>
+                    <ShareBars
+                      items={snapshotsOf(snapshots, s, d.type)
+                        .sort((a, b) => (d.sortByBucket ? a.bucket.localeCompare(b.bucket) : b.share - a.share))
+                        .slice(0, 10)}
+                    />
+                  </Card>
+                )),
               )}
             </div>
+            <p className="mt-4 text-xs text-fg-muted">Each platform&apos;s audience is shown separately. Platforms define and date these breakdowns differently, so they are not combined.</p>
           </Section>
         )}
 
         {/* 7. Discovery */}
         {showDiscovery && (
           <Section id="discovery" number={next()} title="Visibility, Discovery, and Profile Activity" intro={notes.discovery}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <DataTable
+              caption="Discovery and profile activity by platform"
+              columns={[{ label: "Platform" }, { label: "Profile or page activity" }, { label: "Discovery or audience split" }, { label: "Source period" }]}
+              rows={social.discovery.map((d) => [
+                <span key={d.source} className="font-medium text-fg">{d.label}</span>,
+                <span key={`${d.source}-a`} className="block space-y-0.5">{d.activity.map((x) => <span key={x} className="block">{x}</span>)}</span>,
+                <span key={`${d.source}-s`} className="block space-y-0.5">{d.split.map((x) => <span key={x} className="block">{x}</span>)}</span>,
+                d.period,
+              ])}
+            />
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
               {SOCIAL_SOURCES.flatMap((s) =>
                 (["discovery_surface", "follower_status"] as const)
                   .filter((t) => snapshotsOf(snapshots, s, t).length > 0)
@@ -391,12 +430,10 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         {/* 8. Video */}
         {showVideo && (
           <Section id="video" number={next()} title="Video and Short-Form Content Performance" intro={notes.video}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {["ig_reels_views", "fb_reels_engagement_share", "ig_reels_interactions"]
-                .filter((k) => val(k) !== null)
-                .map((k) => (
-                  <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} label={`${METRICS[k].source === "meta_instagram" ? "IG" : "FB"} ${METRICS[k].label}`} />
-                ))}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {VIDEO_KEYS.filter((k) => val(k) !== null).map((k) => (
+                <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} label={videoLabel(k)} />
+              ))}
             </div>
           </Section>
         )}
@@ -456,8 +493,34 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         )}
 
         {/* 10. Month over month */}
-        {momKeys.length > 0 && (
+        {(momKeys.length > 0 || social.compareCards.length > 0) && compareRange && (
           <Section id="mom" number={next()} title={compareTitle} intro={`${period.label} compared with ${period.compareLabel}.`}>
+            {social.compareCards.length > 0 && (
+              <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {social.compareCards.map((c) => (
+                  <Card key={c.source} className="p-5">
+                    <PlatformChip source={c.source} label={c.label} />
+                    <div className="mt-3">
+                      {c.headline ? <BigDelta comparison={c.headline.comparison} /> : <p className="text-2xl font-semibold text-fg-muted">No comparison</p>}
+                    </div>
+                    <dl className="mt-3 space-y-1.5 text-sm">
+                      {c.lines.map((l) => (
+                        <div key={l.label}>
+                          <dt className="inline font-semibold text-fg">{l.label}: </dt>
+                          <dd
+                            className={`inline ${
+                              l.comparison?.sentiment === "positive" ? "text-positive" : l.comparison?.sentiment === "negative" ? "text-negative" : "text-fg-secondary"
+                            }`}
+                          >
+                            {l.text}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </Card>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {momKeys.map((k) => {
                 const c = mom(k)!;
@@ -483,6 +546,16 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 );
               })}
             </div>
+            {social.limitations.length > 0 && (
+              <Card className="mt-6 border-line-focus p-5">
+                <h3 className="text-sm font-semibold text-teal">Comparison limitations</h3>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-fg-secondary">
+                  {social.limitations.map((l) => (
+                    <li key={l}>{l}</li>
+                  ))}
+                </ul>
+              </Card>
+            )}
           </Section>
         )}
 
@@ -505,6 +578,30 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
               <Prose text={commentary.conclusion} />
             </Card>
           </Section>
+        )}
+
+        {social.sourceNotes.length > 0 && (
+          <section aria-labelledby="sources-title" className="text-sm">
+            <h2 id="sources-title" className="text-sm font-semibold uppercase tracking-wider text-fg-secondary">Source and methodology notes</h2>
+            <ul className="mt-3 divide-y divide-line rounded-xl border border-line bg-surface">
+              {social.sourceNotes.map((n) => (
+                <li key={n.label} className="flex gap-3 px-4 py-3">
+                  <span aria-hidden className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal" />
+                  <span className="text-fg-secondary">
+                    <span className="font-semibold text-fg">{n.label}: </span>
+                    {n.text}
+                  </span>
+                </li>
+              ))}
+              <li className="flex gap-3 px-4 py-3">
+                <span aria-hidden className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal" />
+                <span className="text-fg-secondary">
+                  <span className="font-semibold text-fg">Calculation policy: </span>
+                  No estimates are shown as fact. Only measures with the same name are combined, and rates are calculated from their parts. Anything a platform did not supply is marked Not available.
+                </span>
+              </li>
+            </ul>
+          </section>
         )}
 
         <footer className="border-t border-line pt-6 text-center text-xs text-fg-muted">

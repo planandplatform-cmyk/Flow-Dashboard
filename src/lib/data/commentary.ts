@@ -91,7 +91,7 @@ export async function loadMonthFacts(client: Client, month: string): Promise<Mon
     range,
     previous,
     enabled: client.enabled_sources,
-    resolver: new MetricResolver(onlyEnabledSources(data, enabled)),
+    resolver: new MetricResolver(onlyEnabledSources(data, enabled), { prorate: false }),
     ads: adsRange ? { range: adsRange, campaigns: campaigns.map((c) => c.name) } : null,
     posts,
     snapshots,

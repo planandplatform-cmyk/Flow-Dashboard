@@ -42,7 +42,10 @@ const LABELS: Record<ScreenshotPlatform, Record<string, string[]>> = {
     fb_page_visits: ["Facebook visits", "Page visits", "Visits"],
     fb_net_new_followers: ["Net follows", "Follows minus unfollows", "Follows (only if no net figure is shown)"],
     fb_followers: ["Followers", "Total followers", "Page followers"],
-    fb_reels_views: ["Reels views", "Reels plays"],
+    fb_reels_views: ["Reels views", "Reels plays", "Reels total views"],
+    fb_3s_views: ["3-second views"],
+    fb_1min_views: ["1-minute views"],
+    fb_watch_time: ["Watch time (report in minutes: 4h 58m is 298)"],
     fb_reels_interactions: ["Reels interactions", "Reels engagement"],
   },
   meta_instagram: {
@@ -52,9 +55,17 @@ const LABELS: Record<ScreenshotPlatform, Record<string, string[]>> = {
     ig_profile_visits: ["Profile visits", "Profile activity: visits"],
     ig_net_new_followers: ["Net followers", "Follows minus unfollows", "Follows (only if no net figure is shown)"],
     ig_followers: ["Followers", "Total followers"],
-    ig_reels_views: ["Reels views", "Views from Reels"],
-    ig_reels_interactions: ["Reels interactions"],
-    ig_post_views: ["Post views", "Views from posts"],
+    ig_viewers: ["Viewers"],
+    ig_reels_views: ["Reels views", "Views from Reels", "Reels under Views by content type"],
+    ig_post_views: ["Post views", "Views from posts", "Posts under Views by content type"],
+    ig_story_views: ["Stories under Views by content type", "Story views"],
+    ig_live_views: ["Live videos under Views by content type"],
+    ig_reels_interactions: ["Reels interactions", "Reels under Interactions by content type"],
+    ig_post_interactions: ["Posts under Interactions by content type"],
+    ig_story_interactions: ["Stories under Interactions by content type"],
+    ig_live_interactions: ["Live videos under Interactions by content type"],
+    ig_bio_link_taps: ["Bio link taps", "External link taps"],
+    ig_address_taps: ["Business address taps"],
   },
   meta_ads: {
     ads_spend: ["Amount spent"],
@@ -72,6 +83,8 @@ const LABELS: Record<ScreenshotPlatform, Record<string, string[]>> = {
     li_comments: ["Comments"],
     li_reposts: ["Reposts", "Shares"],
     li_clicks: ["Clicks"],
+    li_unique_visitors: ["Unique visitors"],
+    li_button_clicks: ["Custom button clicks"],
   },
 };
 
@@ -79,9 +92,28 @@ const LINKEDIN_COMPONENTS = ["li_reactions", "li_comments", "li_reposts", "li_cl
 
 export const SCREENSHOT_BREAKDOWNS: BreakdownType[] = [
   "age", "gender", "country", "city", "language", "discovery_surface", "follower_status",
-  "follower_status_engagement", "format_engagement", "job_function", "seniority", "industry", "company_size",
+  "follower_status_engagement", "format_engagement", "format_views", "job_function", "seniority", "industry", "company_size",
 ];
-const PERIOD_BREAKDOWNS = new Set<BreakdownType>(["discovery_surface", "follower_status", "follower_status_engagement", "format_engagement"]);
+const PERIOD_BREAKDOWNS = new Set<BreakdownType>(["discovery_surface", "follower_status", "follower_status_engagement", "format_engagement", "format_views"]);
+
+/** LinkedIn competitor tables and the metric each is stored as. */
+export const COMPETITOR_METRICS = ["followers", "new_followers", "posts", "engagements"] as const;
+export type CompetitorMetric = (typeof COMPETITOR_METRICS)[number];
+export const COMPETITOR_LABELS: Record<CompetitorMetric, string> = {
+  followers: "Total followers",
+  new_followers: "New followers",
+  posts: "Posts",
+  engagements: "Engagements",
+};
+
+export interface CompetitorRow {
+  company: string;
+  own: boolean;
+  metric: CompetitorMetric;
+  value: number;
+  /** Percent as shown (6.3 for +6.3%), or null. */
+  change: number | null;
+}
 
 export function metricKeysFor(platform: ScreenshotPlatform): string[] {
   return Object.keys(LABELS[platform]);
@@ -135,6 +167,22 @@ export function extractionSchema(platform: ScreenshotPlatform) {
         confidence: z.enum(["high", "medium", "low"]),
       }),
     ),
+    competitors: z
+      .array(
+        z.object({
+          company: z.string().describe("Company name exactly as shown"),
+          is_your_page: z.boolean().describe("True for the row labeled 'Your Page'"),
+          metric: z.enum(COMPETITOR_METRICS),
+          value: z.number(),
+          value_text: z.string(),
+          change_percent: z.number().nullable().describe("The percent change shown under the value, e.g. 6.3 or -100; null if none shown"),
+          image_index: z.number(),
+          confidence: z.enum(["high", "medium", "low"]),
+        }),
+      )
+      .describe(
+        "LinkedIn Competitors analytics only (Total followers, New followers, Total post metrics, Total engagement metrics tables). Empty for anything else.",
+      ),
     campaign_name: z.string().nullable().describe("Meta Ads only: the campaign name when the screen shows a single campaign."),
     notes: z.array(z.string()).describe("Anything a reviewer should know: unreadable areas, partial screens, comparison periods ignored."),
   });
@@ -153,6 +201,13 @@ export interface ReviewedScreenshotData {
   campaignName: string | null;
   metrics: { key: string; value: number }[];
   breakdowns: { type: BreakdownType; bucket: string; percent: number }[];
+  competitors?: CompetitorRow[];
+}
+
+export interface CompetitorReviewItem extends CompetitorRow {
+  valueText: string;
+  imageIndex: number;
+  confidence: "high" | "medium" | "low";
 }
 
 export interface ReviewItem {
@@ -249,6 +304,23 @@ export function buildScreenshotResult(data: ReviewedScreenshotData): ParseResult
     b.rowsRead++;
   }
 
+  for (const c of data.competitors ?? []) {
+    const company = c.company.trim().slice(0, 120);
+    if (platform !== "linkedin") {
+      b.error("Competitor comparisons can only be saved for LinkedIn.");
+      break;
+    }
+    if (!company || !COMPETITOR_METRICS.includes(c.metric) || !Number.isFinite(c.value) || c.value < 0) {
+      b.error(`${company || "A competitor row"}: check the company name and value.`);
+      continue;
+    }
+    const key = `li_comp_${c.metric}`;
+    const dim = c.own ? "own_page" : "competitor";
+    b.period(source, key, period.start, period.end, c.value, dim, company);
+    if (c.change !== null && Number.isFinite(c.change)) b.period(source, `${key}_change`, period.start, period.end, c.change / 100, dim, company);
+    b.rowsRead++;
+  }
+
   if (data.breakdowns.length) {
     if (platform === "meta_ads") {
       b.warn("Audience breakdowns from ad screenshots are not stored; enter organic audience data on Facebook or Instagram.");
@@ -292,6 +364,7 @@ export function reviewExtraction(
   period: Period | null;
   items: ReviewItem[];
   breakdowns: BreakdownReviewItem[];
+  competitors: CompetitorReviewItem[];
   campaignName: string | null;
   warnings: string[];
   errors: string[];
@@ -328,8 +401,11 @@ export function reviewExtraction(
   }
 
   const items: ReviewItem[] = extraction.metrics.map((m) => {
-    const abbreviated = /\d\s*[km]\b/i.test(m.value_text);
-    const shown = abbreviated ? null : num(m.value_text);
+    // Durations ("4h 58m") are converted to minutes by the model; the K/M and
+    // on-screen checks below are for counts only.
+    const isDuration = METRICS[m.key]?.format === "duration";
+    const abbreviated = !isDuration && /\d\s*[km]\b/i.test(m.value_text);
+    const shown = abbreviated || isDuration ? null : num(m.value_text);
     let value = m.value;
     let note: string | null = null;
     if (abbreviated) note = `Shown rounded as ${m.value_text}. Use the exact number from the platform if you have it.`;
@@ -358,6 +434,16 @@ export function reviewExtraction(
     period,
     items,
     breakdowns: extraction.breakdowns.map((b) => ({ type: b.type, bucket: b.bucket, percent: b.percent, imageIndex: b.image_index, confidence: b.confidence })),
+    competitors: (platform === "linkedin" ? extraction.competitors : []).map((c) => ({
+      company: c.company,
+      own: c.is_your_page,
+      metric: c.metric,
+      value: c.value,
+      change: c.change_percent,
+      valueText: c.value_text,
+      imageIndex: c.image_index,
+      confidence: c.confidence,
+    })),
     campaignName: extraction.campaign_name,
     warnings,
     errors,

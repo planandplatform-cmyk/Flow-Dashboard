@@ -14,6 +14,8 @@ import {
   SCREENSHOT_PLATFORMS,
   SCREENSHOT_TYPES,
   type BreakdownReviewItem,
+  type CompetitorReviewItem,
+  COMPETITOR_METRICS,
   type ReviewedScreenshotData,
   type ReviewItem,
   type ScreenshotPlatform,
@@ -38,6 +40,7 @@ export type ScreenshotReadState =
       period: Period | null;
       items: ReviewItem[];
       breakdowns: BreakdownReviewItem[];
+      competitors: CompetitorReviewItem[];
       campaignName: string | null;
       warnings: string[];
       errors: string[];
@@ -113,12 +116,13 @@ export async function readScreenshotUpload(slug: string, _prev: ScreenshotReadSt
       campaignName: review.campaignName,
       metrics: review.items.map((i) => ({ key: i.key, value: i.value })),
       breakdowns: review.breakdowns,
+      competitors: review.competitors,
     });
     errors.push(...result.errors.filter((e) => !errors.includes(e)));
     review.warnings.push(...result.warnings.filter((w) => !review.warnings.includes(w)));
     if (result.ok) overlap = await overlapFor(auth.client.id, result.batch);
   }
-  if (!review.items.length && !review.breakdowns.length) errors.push("No numbers could be read from these files.");
+  if (!review.items.length && !review.breakdowns.length && !review.competitors.length) errors.push("No numbers could be read from these files.");
 
   return { status: "ready", platform, ...review, errors, overlap, demo: isDemoMode() };
 }
@@ -137,6 +141,15 @@ function parseReviewed(raw: string): ReviewedScreenshotData | null {
       breakdowns: v.breakdowns
         .filter((b) => SCREENSHOT_BREAKDOWNS.includes(b.type))
         .map((b) => ({ type: b.type, bucket: String(b.bucket).slice(0, 120), percent: Number(b.percent) })),
+      competitors: (Array.isArray(v.competitors) ? v.competitors : [])
+        .filter((c) => (COMPETITOR_METRICS as readonly string[]).includes(c.metric))
+        .map((c) => ({
+          company: String(c.company).slice(0, 120),
+          own: Boolean(c.own),
+          metric: c.metric,
+          value: Number(c.value),
+          change: c.change === null || c.change === undefined || String(c.change) === "" ? null : Number(c.change),
+        })),
     };
   } catch {
     return null;

@@ -11,6 +11,7 @@ import {
   getLatestDataDate,
   getLatestPublishedMonth,
   getMetricData,
+  getPostCounts,
   getTopPosts,
   type AudienceSnapshot,
   type Client,
@@ -20,6 +21,7 @@ import { compare, MetricResolver, onlyEnabledSources, type DateRange } from "@/l
 import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource, type SocialSource } from "@/lib/metrics/types";
 import { compareWindow, PRESETS, resolvePeriod } from "./period";
+import { buildSocial, NOT_AVAILABLE } from "./social";
 import { buildTrends, metricDependencies, TREND_KEYS, trendFetchRange, trendMonths } from "./trends";
 
 /** Three headline tiles per platform, as in the monthly report. */
@@ -33,12 +35,15 @@ export const PLATFORM_TILES: Record<SocialSource, { keys: [string, string, strin
 /** Candidates for the month-over-month grid; only ones with data are shown. */
 export const MOM_KEYS = [
   "fb_views",
+  "fb_page_visits",
   "fb_interactions",
   "ig_followers",
   "ig_views",
   "ig_interactions",
+  "ig_profile_visits",
   "tt_views",
   "li_impressions",
+  "li_page_views",
   "ga4_sessions",
   "ga4_key_events",
   "ga4_engagement_rate",
@@ -69,6 +74,32 @@ export const FORMAT_LABELS: Record<string, string> = {
 export function snapshotsOf(snaps: AudienceSnapshot[], platform: DataSource, type: string) {
   return snaps.filter((s) => s.platform === platform && s.breakdown_type === type);
 }
+
+/** Audience breakdowns shown in the demographics section, with their titles. */
+export const DEMOGRAPHICS: { type: string; title: string; sortByBucket?: boolean }[] = [
+  { type: "age", title: "age range", sortByBucket: true },
+  { type: "gender", title: "gender" },
+  { type: "country", title: "top countries" },
+  { type: "city", title: "top cities" },
+  { type: "language", title: "top languages" },
+  { type: "job_function", title: "job function" },
+  { type: "seniority", title: "seniority" },
+  { type: "industry", title: "industry" },
+  { type: "company_size", title: "company size" },
+];
+
+/** Video and short-form tiles, shown when the platform supplied them. */
+export const VIDEO_KEYS = [
+  "fb_reels_views",
+  "fb_watch_time",
+  "fb_3s_views",
+  "fb_1min_views",
+  "ig_reels_views",
+  "ig_reels_interactions",
+  "fb_reels_engagement_share",
+];
+
+export const videoLabel = (key: string) => `${METRICS[key].source === "meta_instagram" ? "Instagram" : "Facebook"} ${METRICS[key].label}`;
 
 type Search = Record<string, string | string[] | undefined>;
 
@@ -132,19 +163,40 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const snapshots = allSnapshots.filter((s) => enabled.has(s.platform));
   const annotations = allAnnotations.filter((a) => a.date >= range.start && a.date <= range.end);
 
-  const resolver = new MetricResolver(data);
+  // A single month never shows a cut-down slice of a platform total; custom
+  // ranges do, flagged as estimates.
+  const resolver = new MetricResolver(data, { prorate: !period.month });
   const val = (key: string, r: DateRange = range) => resolver.resolve(key, r).value;
-  const mom = (key: string) => (compareRange ? compare(key, val(key), val(key, compareRange)) : null);
+  // Combined totals are only compared when the same platforms are in both periods.
+  const comparable = (key: string) => {
+    const agg = METRICS[key]?.aggregation;
+    if (agg?.type !== "derived_sum" || !compareRange) return true;
+    return agg.of.every((part) => (val(part) === null) === (val(part, compareRange) === null));
+  };
+  const mom = (key: string) => (compareRange && comparable(key) ? compare(key, val(key), val(key, compareRange)) : null);
   const adsCmp = (key: string) => (adsRange && adsCompare ? compare(key, val(key, adsRange), val(key, adsCompare)) : null);
 
-  const socials = SOCIAL_SOURCES.filter((s) => enabled.has(s) && val(SOCIAL_OVERVIEW_KEYS[s].views) !== null);
+  const enabledSocial = SOCIAL_SOURCES.filter((s) => enabled.has(s));
+  const postCounts = enabledSocial.length ? await getPostCounts(client.id, range, enabledSocial) : {};
+  const social = buildSocial({
+    resolver,
+    data,
+    range,
+    compareRange,
+    compareLabel: period.compareLabel,
+    enabled: enabledSocial,
+    narratives: commentary?.platform_narratives ?? {},
+    snapshots,
+    postCounts,
+  });
+  const socials = social.platforms.map((p) => p.source);
   const narratives = commentary?.platform_narratives ?? {};
   const notes = commentary?.section_notes ?? {};
   const hasWebsite = enabled.has("ga4") && val("ga4_sessions") !== null;
   const hasAds = adsRange !== null && val("ads_spend", adsRange) !== null;
   const momKeys = compareRange ? MOM_KEYS.filter((k) => val(k) !== null && val(k, compareRange) !== null) : [];
 
-  const trends = buildTrends(new MetricResolver(onlyEnabledSources(trendData, enabled)), trendKeys, months, today, (k) => {
+  const trends = buildTrends(new MetricResolver(onlyEnabledSources(trendData, enabled), { prorate: false }), trendKeys, months, today, (k) => {
     const def = METRICS[k];
     return def.source === "combined" ? def.label : `${SOURCE_LABELS[def.source]} ${def.label}`;
   });
@@ -154,10 +206,10 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   ].filter((g) => g.keys.length > 0);
   const chartAnnotations = allAnnotations.map((a) => ({ month: monthOf(a.date), date: a.date, label: `${formatDay(a.date)}: ${a.label}` }));
 
-  const showContent = (posts.length > 0 || snapshotsOf(snapshots, "meta_facebook", "format_engagement").length > 0);
-  const showAudience = snapshots.some((s) => ["age", "gender", "country", "language"].includes(s.breakdown_type));
-  const showDiscovery = snapshots.some((s) => ["discovery_surface", "follower_status"].includes(s.breakdown_type));
-  const showVideo = (val("ig_reels_views") !== null || val("fb_reels_interactions") !== null);
+  const showContent = posts.length > 0 || social.contentTypes.length > 0 || snapshots.some((s) => s.breakdown_type === "format_engagement");
+  const showAudience = snapshots.some((s) => DEMOGRAPHICS.some((d) => d.type === s.breakdown_type));
+  const showDiscovery = social.discovery.some((d) => d.activity[0] !== NOT_AVAILABLE || d.split[0] !== NOT_AVAILABLE);
+  const showVideo = VIDEO_KEYS.some((k) => val(k) !== null);
 
   const nav = [
     { id: "summary", label: "Summary", show: true },
@@ -170,7 +222,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     { id: "discovery", label: "Discovery", show: showDiscovery },
     { id: "video", label: "Video", show: showVideo },
     { id: "ads", label: "Ads", show: hasAds },
-    { id: "mom", label: "Comparison", show: momKeys.length > 0 },
+    { id: "mom", label: "Comparison", show: compareRange !== null && (momKeys.length > 0 || social.compareCards.length > 0) },
     { id: "trends", label: "Trends", show: trends.length > 0 },
   ].filter((n) => n.show);
 
@@ -184,8 +236,17 @@ export async function loadReport(client: Client, search: Search, opts: { publish
 
 
   const heroTiles = [
-    { key: "total_audience_reach", caption: socials.map((s) => `${SOURCE_LABELS[s]} ${METRICS[SOCIAL_OVERVIEW_KEYS[s].views].label}`).join(" + ") },
-    { key: "total_interactions", caption: socials.map((s) => SOURCE_LABELS[s]).join(" + ") + " engagement" },
+    {
+      key: "total_audience_reach",
+      caption: socials
+        .filter((s) => s !== "linkedin" && val(SOCIAL_OVERVIEW_KEYS[s].views) !== null)
+        .map((s) => `${SOURCE_LABELS[s]} ${METRICS[SOCIAL_OVERVIEW_KEYS[s].views].label}`)
+        .join(" + "),
+    },
+    {
+      key: "total_interactions",
+      caption: socials.filter((s) => val(SOCIAL_OVERVIEW_KEYS[s].interactions) !== null).map((s) => SOURCE_LABELS[s]).join(" + ") + " engagement",
+    },
     ...(hasWebsite ? [{ key: "ga4_engagement_rate", caption: "Website visits that engaged", label: "Website Engagement" }] : []),
   ] as { key: string; caption: string; label?: string }[];
 
@@ -210,6 +271,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     snapshots,
     annotations,
     socials,
+    social,
     hasWebsite,
     hasAds,
     momKeys,

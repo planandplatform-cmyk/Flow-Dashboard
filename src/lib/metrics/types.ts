@@ -29,8 +29,9 @@ export type SocialSource = (typeof SOCIAL_SOURCES)[number];
  * - percent:    stored as a fraction (0.986), shown as 98.6%
  * - currency:   USD, $719.19
  * - multiplier: 2.19x (frequency)
+ * - duration:   stored in minutes, shown as 4h 58m (watch time)
  */
-export type MetricFormat = "number" | "percent" | "currency" | "multiplier";
+export type MetricFormat = "number" | "percent" | "currency" | "multiplier" | "duration";
 
 /**
  * How a metric rolls up over an arbitrary date range.

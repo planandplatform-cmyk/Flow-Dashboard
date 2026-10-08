@@ -5,7 +5,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { Button, Field, Notice, inputClass } from "@/components/form";
 import { formatValue } from "@/lib/metrics/format";
 import { METRICS } from "@/lib/metrics/config";
-import { MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type ScreenshotPlatform } from "@/lib/ingest/screenshot";
+import { COMPETITOR_LABELS, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type CompetitorMetric, type ScreenshotPlatform } from "@/lib/ingest/screenshot";
 import type { BreakdownType } from "@/lib/ingest/types";
 import { readScreenshotUpload, saveScreenshotUpload, type ScreenshotReadState } from "./screenshot-actions";
 
@@ -27,6 +27,7 @@ const BREAKDOWN_LABELS: Record<BreakdownType, string> = {
   follower_status: "Follower status (views)",
   follower_status_engagement: "Follower status (engagement)",
   format_engagement: "Engagement by format",
+  format_views: "Views by content type",
   job_function: "Job function",
   seniority: "Seniority",
   industry: "Industry",
@@ -85,6 +86,16 @@ interface Row {
   imageIndex: number;
   confidence: "high" | "medium" | "low";
   note: string | null;
+}
+interface CRow {
+  include: boolean;
+  company: string;
+  own: boolean;
+  metric: CompetitorMetric;
+  value: string;
+  change: string;
+  imageIndex: number;
+  confidence: "high" | "medium" | "low";
 }
 interface BRow {
   include: boolean;
@@ -333,6 +344,9 @@ function Review({
 }) {
   const [rows, setRows] = useState<Row[]>(() => state.items.map((i) => ({ ...i, include: true, value: String(i.value) })));
   const [brows, setBrows] = useState<BRow[]>(() => state.breakdowns.map((b) => ({ ...b, include: true, percent: String(b.percent) })));
+  const [crows, setCrows] = useState<CRow[]>(() =>
+    state.competitors.map((c) => ({ ...c, include: true, value: String(c.value), change: c.change === null ? "" : String(c.change) })),
+  );
   const [start, setStart] = useState(state.period?.start ?? "");
   const [end, setEnd] = useState(state.period?.end ?? "");
   const [campaign, setCampaign] = useState(state.campaignName ?? "");
@@ -351,6 +365,9 @@ function Review({
       campaignName: campaign || null,
       metrics: included.map((r) => ({ key: r.key, value: Number(r.value.replace(/,/g, "")) })),
       breakdowns: brows.filter((b) => b.include).map((b) => ({ type: b.type, bucket: b.bucket, percent: Number(b.percent) })),
+      competitors: crows
+        .filter((c) => c.include)
+        .map((c) => ({ company: c.company, own: c.own, metric: c.metric, value: Number(c.value.replace(/,/g, "")), change: c.change.trim() === "" ? null : Number(c.change.replace(/[%+]/g, "")) })),
     });
   }
 
@@ -503,6 +520,55 @@ function Review({
         </div>
       )}
 
+      {crows.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-line">
+          <table className="w-full min-w-[640px] text-sm">
+            <caption className="bg-raised px-4 pt-3 text-left text-xs font-medium uppercase tracking-wider text-fg-secondary">
+              LinkedIn competitor comparison read
+            </caption>
+            <thead className="bg-raised">
+              <tr>
+                {["", "Company", "Your page", "Measure", "Value", "Change %", "File"].map((h, i) => (
+                  <th key={i} scope="col" className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-fg-secondary">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-surface">
+              {crows.map((c, i) => {
+                const set = (patch: Partial<CRow>) => setCrows(crows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                return (
+                  <tr key={i} className={`border-t border-line ${c.include ? "" : "opacity-50"}`}>
+                    <td className="px-3 py-2">
+                      <input type="checkbox" aria-label={`Include ${c.company}`} checked={c.include} onChange={(e) => set({ include: e.target.checked })} className="h-4 w-4 accent-[var(--color-teal)]" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input aria-label="Company" value={c.company} onChange={(e) => set({ company: e.target.value })} className={inputClass} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="checkbox" aria-label={`${c.company} is your page`} checked={c.own} onChange={(e) => set({ own: e.target.checked })} className="h-4 w-4 accent-[var(--color-teal)]" />
+                    </td>
+                    <td className="px-3 py-2 text-fg-secondary">{COMPETITOR_LABELS[c.metric]}</td>
+                    <td className="px-3 py-2">
+                      <input aria-label={`${c.company} value`} inputMode="decimal" value={c.value} onChange={(e) => set({ value: e.target.value })} className={`${inputClass} w-24 text-right tabular-nums`} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input aria-label={`${c.company} change`} inputMode="decimal" placeholder="None" value={c.change} onChange={(e) => set({ change: e.target.value })} className={`${inputClass} w-24 text-right tabular-nums`} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <button type="button" onClick={() => setZoom(c.imageIndex)} className="text-teal hover:text-teal-200">
+                        #{c.imageIndex}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {zoom !== null && shots[zoom - 1] && (
         <figure className="rounded-xl border border-line bg-surface p-3">
           <figcaption className="mb-2 flex items-center justify-between text-xs text-fg-secondary">
@@ -536,7 +602,7 @@ function Review({
 
       {saveError && <Notice tone="error">{saveError}</Notice>}
       <div className="flex flex-wrap gap-3">
-        <Button type="button" onClick={save} disabled={saving || state.demo || badNumber || !datesOk || blocking.length > 0 || (included.length === 0 && !brows.some((b) => b.include))}>
+        <Button type="button" onClick={save} disabled={saving || state.demo || badNumber || !datesOk || blocking.length > 0 || (included.length === 0 && !brows.some((b) => b.include) && !crows.some((c) => c.include))}>
           {saving ? "Saving..." : "Save checked values"}
         </Button>
         {badNumber && <span className="self-center text-sm text-negative">Every ticked value needs a number.</span>}

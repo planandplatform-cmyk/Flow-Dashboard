@@ -8,7 +8,8 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatDelta, formatMetric, formatPctChange, formatValue } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, FORMAT_LABELS, PLATFORM_TILES, snapshotsOf, type Report } from "@/lib/report/load";
+import { ADS_TABLE, DEMOGRAPHICS, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, type Report } from "@/lib/report/load";
+import { PLATFORM_COLORS, type Bar, type CompetitorTable } from "@/lib/report/social";
 import { describeRange } from "@/lib/report/period";
 import type { TrendSeries } from "@/lib/report/trends";
 import { DARK, PRINT, type PdfTheme } from "./theme";
@@ -69,7 +70,7 @@ type S = ReturnType<typeof styles>;
 function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
   const s = styles(t);
   const r = report;
-  const { period, range, val, mom, socials, narratives, notes, commentary } = r;
+  const { period, range, val, mom, socials, social, narratives, notes, commentary } = r;
   let n = 0;
   const next = () => ++n;
   const year = r.today.slice(0, 4);
@@ -151,32 +152,29 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
 
         {/* Social overview */}
         {socials.length > 0 && (
-          <View style={s.section} wrap={false}>
-            <Heading s={s} n={next()} title="Social Media Performance Overview" />
-            <Table
-              s={s}
-              t={t}
-              widths={[28, 18, 18, 18, 18]}
-              head={["Platform", "Ending Audience", "Net New Followers", "Total Views / Reach", "Total Interactions"]}
-              rows={socials.map((src) => {
-                const k = SOCIAL_OVERVIEW_KEYS[src];
-                const net = val(k.netNew);
-                return [
-                  SOURCE_LABELS[src],
-                  formatMetric(k.followers, val(k.followers)),
-                  net === null ? "N/A" : `${net > 0 ? "+" : ""}${formatMetric(k.netNew, net)}`,
-                  formatMetric(k.views, val(k.views)),
-                  formatMetric(k.interactions, val(k.interactions)),
-                ];
-              })}
-              footer={[
-                "Total Combined",
-                formatMetric("total_followers", val("total_followers")),
-                `+${formatMetric("total_net_new_followers", val("total_net_new_followers"))}`,
-                formatMetric("total_audience_reach", val("total_audience_reach")),
-                formatMetric("total_interactions", val("total_interactions")),
-              ]}
-            />
+          <View style={s.section}>
+            <View wrap={false}>
+              <Heading s={s} n={next()} title="Social Media Performance Overview" />
+              <Text style={[s.body, { marginBottom: 8 }]}>
+                Each platform keeps its own metric names and the dates it supplied. Only measures with the same name are combined.
+              </Text>
+              <Table
+                s={s}
+                t={t}
+                left
+                widths={[11, 15, 14, 12, 20, 15, 13]}
+                head={["Platform", "Source period", "Ending audience", "Net new followers", "Visibility", "Engagement", "Posts published"]}
+                rows={social.overview.map((o) => [o.label, o.period, o.audience, o.netNew, o.visibility, o.engagement, o.posts])}
+                footer={social.combined ? ["Combined", social.combined.note, "", "", social.combined.views, social.combined.interactions, ""] : undefined}
+              />
+            </View>
+            {social.visibilityBars.length > 1 && (
+              <View wrap={false} style={[s.card, { marginTop: 10 }]}>
+                <Text style={[s.h3, { fontSize: 10, marginBottom: 8 }]}>Supplied visibility measures by platform</Text>
+                <Bars t={t} bars={social.visibilityBars} />
+                {social.visibilityNote && <Text style={{ marginTop: 6, fontSize: 7.5, color: t.fgMuted }}>{social.visibilityNote}</Text>}
+              </View>
+            )}
           </View>
         )}
 
@@ -184,28 +182,30 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         {socials.length > 0 && (
           <View style={s.section}>
             <Heading s={s} n={next()} title="Platform Performance Breakdown" />
-            {socials.map((src, i) => {
-              const cfg = PLATFORM_TILES[src];
-              const nar = narratives[src];
-              const [viewsKey, intKey] = cfg.headline;
-              return (
-                <View key={src} wrap={false} style={{ marginTop: i ? 14 : 0, borderLeftWidth: 2, borderLeftColor: t.accent, paddingLeft: 10 }}>
-                  <Text style={s.eyebrow}>
-                    {i + 1} · {SOURCE_LABELS[src]}
-                  </Text>
-                  <Text style={s.h3}>
-                    {nar?.headline ??
-                      `${formatMetric(viewsKey, val(viewsKey))} ${METRICS[viewsKey].label}, ${formatMetric(intKey, val(intKey))} ${METRICS[intKey].label}`}
-                  </Text>
-                  {nar?.body && <Text style={[s.body, { marginTop: 3 }]}>{nar.body}</Text>}
-                  <View style={[s.row, { marginTop: 8 }]}>
-                    {cfg.keys.map((k) => (
-                      <Kpi key={k} s={s} t={t} metricKey={k} value={val(k)} comparison={mom(k)} />
-                    ))}
-                  </View>
+            {social.platforms.map((p, i) => (
+              <View key={p.source} wrap={false} style={[s.card, { marginTop: i ? 10 : 0, borderLeftWidth: 3, borderLeftColor: t.accent, padding: 12 }]}>
+                <Chip label={p.label} color={p.color} />
+                <Text style={[s.h3, { marginTop: 6 }]}>{p.headline}</Text>
+                {p.body && <Text style={[s.body, { marginTop: 3 }]}>{p.body}</Text>}
+                {p.sourcePeriod && <Text style={{ marginTop: 3, fontSize: 7.5, color: t.fgMuted }}>Platform totals for {p.sourcePeriod}, as supplied.</Text>}
+                <View style={[s.row, { marginTop: 8 }]}>
+                  {p.tiles.map((tile) => (
+                    <Kpi key={tile.key} s={s} t={t} metricKey={tile.key} value={tile.numeric} comparison={tile.comparison} caption={tile.caption ?? undefined} />
+                  ))}
                 </View>
-              );
-            })}
+                {p.missingNote && <Text style={{ marginTop: 6, fontSize: 7.5, color: t.fgMuted }}>{p.missingNote}</Text>}
+              </View>
+            ))}
+            {social.competitors && (
+              <View wrap={false} style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <Chip label="LinkedIn" color={PLATFORM_COLORS.linkedin} />
+                  <Text style={{ fontSize: 11, fontWeight: 600 }}>Competitor comparison</Text>
+                  <Text style={{ fontSize: 7.5, color: t.fgMuted }}>As shown by LinkedIn for {social.competitors.period}</Text>
+                </View>
+                <CompetitorPdf s={s} t={t} table={social.competitors} />
+              </View>
+            )}
           </View>
         )}
 
@@ -274,13 +274,27 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                 <Table
                   s={s}
                   t={t}
-                  widths={[15, 15, 55, 15]}
-                  head={["Platform", "Format", "Post", "Views"]}
-                  rows={r.posts.map((p) => [SOURCE_LABELS[p.platform], FORMAT_LABELS[p.format] ?? p.format, p.summary ?? "", formatMetric("ig_views", p.views)])}
+                  widths={[7, 13, 15, 11, 42, 12]}
+                  head={["Rank", "Platform", "Published", "Format", "Post", "Views"]}
+                  rows={r.posts.map((p, i) => [
+                    String(i + 1),
+                    SOURCE_LABELS[p.platform],
+                    p.published_at ? formatDay(p.published_at.slice(0, 10)) : "Not available",
+                    FORMAT_LABELS[p.format] ?? p.format,
+                    p.summary ?? "",
+                    formatMetric("ig_views", p.views),
+                  ])}
                 />
               )}
             </View>
             <View style={[s.row, { flexWrap: "wrap", marginTop: 8 }]}>
+              {social.contentTypes.map((c) => (
+                <View key={c.title} wrap={false} style={[s.card, { width: "49%" }]}>
+                  <Text style={[s.label, { marginBottom: 6 }]}>{c.title}</Text>
+                  <Bars t={t} bars={c.bars} />
+                  {c.note && <Text style={{ marginTop: 5, fontSize: 7, color: t.fgMuted }}>{c.note}</Text>}
+                </View>
+              ))}
               {SOCIAL_SOURCES.filter((src) => snapshotsOf(r.snapshots, src, "format_engagement").length > 0).map((src) => (
                 <ShareCard key={src} s={s} t={t} title={`${SOURCE_LABELS[src]} engagement by format`} items={snapshotsOf(r.snapshots, src, "format_engagement")} />
               ))}
@@ -301,17 +315,15 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
               }
             >
               {SOCIAL_SOURCES.flatMap((src) =>
-                (["age", "gender", "country", "language"] as const)
-                  .filter((type) => snapshotsOf(r.snapshots, src, type).length > 0)
-                  .map((type) => (
-                    <ShareCard
-                      key={`${src}-${type}`}
-                      s={s}
-                      t={t}
-                      title={`${SOURCE_LABELS[src]} audience by ${type === "age" ? "age range" : type === "country" ? "top countries" : type === "language" ? "top languages" : type}`}
-                      items={snapshotsOf(r.snapshots, src, type).sort((a, b) => (type === "age" ? a.bucket.localeCompare(b.bucket) : b.share - a.share))}
-                    />
-                  )),
+                DEMOGRAPHICS.filter((d) => snapshotsOf(r.snapshots, src, d.type).length > 0).map((d) => (
+                  <ShareCard
+                    key={`${src}-${d.type}`}
+                    s={s}
+                    t={t}
+                    title={`${SOURCE_LABELS[src]} audience by ${d.title}`}
+                    items={snapshotsOf(r.snapshots, src, d.type).sort((a, b) => (d.sortByBucket ? a.bucket.localeCompare(b.bucket) : b.share - a.share))}
+                  />
+                )),
               )}
             </Grid>
           </View>
@@ -326,6 +338,16 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                 <>
                   <Heading s={s} n={next()} title="Visibility, Discovery, and Profile Activity" />
                   {notes.discovery && <Text style={[s.body, { marginBottom: 8 }]}>{notes.discovery}</Text>}
+                  <View style={{ marginBottom: 8 }}>
+                    <Table
+                      s={s}
+                      t={t}
+                      left
+                      widths={[13, 32, 33, 22]}
+                      head={["Platform", "Profile or page activity", "Discovery or audience split", "Source period"]}
+                      rows={social.discovery.map((d) => [d.label, d.activity.join("\n"), d.split.join("\n"), d.period])}
+                    />
+                  </View>
                 </>
               }
             >
@@ -348,24 +370,20 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
 
         {/* Video */}
         {r.show.video && (
-          <View style={s.section} wrap={false}>
-            <Heading s={s} n={next()} title="Video and Short-Form Content Performance" />
-            {notes.video && <Text style={[s.body, { marginBottom: 8 }]}>{notes.video}</Text>}
-            <View style={s.row}>
-              {["ig_reels_views", "fb_reels_engagement_share", "ig_reels_interactions"]
-                .filter((k) => val(k) !== null)
-                .map((k) => (
-                  <Kpi
-                    key={k}
-                    s={s}
-                    t={t}
-                    metricKey={k}
-                    value={val(k)}
-                    comparison={mom(k)}
-                    label={`${METRICS[k].source === "meta_instagram" ? "IG" : "FB"} ${METRICS[k].label}`}
-                  />
-                ))}
-            </View>
+          <View style={s.section}>
+            <Grid
+              columns={3}
+              lead={
+                <>
+                  <Heading s={s} n={next()} title="Video and Short-Form Content Performance" />
+                  {notes.video && <Text style={[s.body, { marginBottom: 8 }]}>{notes.video}</Text>}
+                </>
+              }
+            >
+              {VIDEO_KEYS.filter((k) => val(k) !== null).map((k) => (
+                <Kpi key={k} s={s} t={t} metricKey={k} value={val(k)} comparison={mom(k)} label={videoLabel(k)} />
+              ))}
+            </Grid>
           </View>
         )}
 
@@ -404,7 +422,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Comparison */}
-        {r.momKeys.length > 0 && r.compareRange && (
+        {(r.momKeys.length > 0 || social.compareCards.length > 0) && r.compareRange && (
           <View style={s.section}>
             <Grid
               columns={4}
@@ -414,6 +432,32 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                   <Text style={[s.body, { marginBottom: 8 }]}>
                     {period.label} compared with {period.compareLabel}.
                   </Text>
+                  {social.compareCards.length > 0 && (
+                    <View style={[s.row, { marginBottom: 8 }]}>
+                      {social.compareCards.map((c) => {
+                        const hc = c.headline?.comparison;
+                        const color = hc?.sentiment === "positive" ? t.positive : hc?.sentiment === "negative" ? t.negative : t.fgMuted;
+                        return (
+                          <View key={c.source} style={[s.card, { flex: 1 }]}>
+                            <Chip label={c.label} color={c.color} />
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, marginBottom: 4 }}>
+                              {hc && hc.direction && hc.direction !== "flat" && <Triangle up={hc.direction === "up"} color={color} size={9} />}
+                              <Text style={{ fontSize: c.headline ? 18 : 12, fontWeight: 600, color, lineHeight: 1.2 }}>{c.headline?.text ?? "No comparison"}</Text>
+                            </View>
+                            {c.lines.map((l) => {
+                              const lc = l.comparison?.sentiment === "positive" ? t.positive : l.comparison?.sentiment === "negative" ? t.negative : t.fgSecondary;
+                              return (
+                                <Text key={l.label} style={{ fontSize: 7.5, marginTop: 3, color: lc }}>
+                                  <Text style={{ fontWeight: 600, color: t.fg }}>{l.label}: </Text>
+                                  {l.text}
+                                </Text>
+                              );
+                            })}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </>
               }
             >
@@ -436,6 +480,16 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                 );
               })}
             </Grid>
+            {social.limitations.length > 0 && (
+              <View wrap={false} style={[s.card, { marginTop: 8, borderColor: t.accent }]}>
+                <Text style={{ fontSize: 9.5, fontWeight: 600, color: t.accentText, marginBottom: 4 }}>Comparison limitations</Text>
+                {social.limitations.map((l) => (
+                  <Text key={l} style={{ fontSize: 8, color: t.fgSecondary, marginTop: 2 }}>
+                    • {l}
+                  </Text>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
@@ -467,6 +521,23 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
             <Heading s={s} n={next()} title="Conclusion" />
             <View style={{ backgroundColor: t.conclusionBg, borderRadius: 8, padding: 16, borderLeftWidth: 3, borderLeftColor: t.accent }}>
               <Paragraphs text={commentary.conclusion} style={{ color: t.conclusionText, fontSize: 9.5, lineHeight: 1.6 }} />
+            </View>
+          </View>
+        )}
+        {/* Sources */}
+        {social.sourceNotes.length > 0 && (
+          <View style={s.section} wrap={false}>
+            <Text style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Source and methodology notes</Text>
+            <View style={s.card}>
+              {[...social.sourceNotes, { label: "Calculation policy", text: "No estimates are shown as fact. Only measures with the same name are combined, and rates are calculated from their parts. Anything a platform did not supply is marked Not available." }].map((n, i) => (
+                <View key={n.label} style={{ flexDirection: "row", gap: 6, paddingVertical: 4, borderTopWidth: i ? 0.5 : 0, borderTopColor: t.line }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: t.accent, marginTop: 3 }} />
+                  <Text style={{ flex: 1, fontSize: 8, color: t.fgSecondary }}>
+                    <Text style={{ fontWeight: 600, color: t.fg }}>{n.label}: </Text>
+                    {n.text}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -512,6 +583,73 @@ function Grid({ columns, lead, children }: { columns: number; lead: React.ReactN
       </View>
       {rows.slice(1).map((cells, i) => row(cells, i + 1))}
     </>
+  );
+}
+
+/** Platform label in the platform's brand color (only labels and bars use brand colors). */
+function Chip({ label, color }: { label: string; color: string }) {
+  return (
+    <View style={{ alignSelf: "flex-start", backgroundColor: color, borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2 }}>
+      <Text style={{ fontSize: 6.5, fontWeight: 700, letterSpacing: 0.8, color: "#ffffff", textTransform: "uppercase" }}>{label}</Text>
+    </View>
+  );
+}
+
+function Bars({ t, bars }: { t: PdfTheme; bars: Bar[] }) {
+  const max = Math.max(...bars.map((b) => b.value), 0) || 1;
+  return (
+    <View>
+      {bars.map((b) => (
+        <View key={b.label} style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 5 }}>
+          <Text style={{ width: "30%", fontSize: 8, color: t.fgSecondary }}>{b.label}</Text>
+          <View style={{ flex: 1, height: 7, backgroundColor: t.raised, borderRadius: 4 }}>
+            <View style={{ height: 7, width: `${Math.max(1, (b.value / max) * 100)}%`, backgroundColor: b.color, borderRadius: 4 }} />
+          </View>
+          <Text style={{ width: 44, textAlign: "right", fontSize: 8, fontWeight: 600, color: t.fg }}>{b.display}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function CompetitorPdf({ s, t, table }: { s: S; t: PdfTheme; table: CompetitorTable }) {
+  const w = 60 / table.columns.length;
+  return (
+    <View style={{ borderWidth: 0.75, borderColor: t.line, borderRadius: 6, overflow: "hidden" }}>
+      <View style={{ flexDirection: "row", backgroundColor: t.tableHead }}>
+        <Text style={[s.label, { width: "8%", padding: 6, color: t.tableHeadText, fontSize: 6.5 }]}>Rank</Text>
+        <Text style={[s.label, { width: "32%", padding: 6, color: t.tableHeadText, fontSize: 6.5 }]}>Company</Text>
+        {table.columns.map((c) => (
+          <Text key={c.metric} style={[s.label, { width: `${w}%`, padding: 6, color: t.tableHeadText, fontSize: 6.5, textAlign: "right" }]}>
+            {c.label}
+          </Text>
+        ))}
+      </View>
+      {table.rows.map((r, ri) => (
+        <View key={r.company} style={{ flexDirection: "row", alignItems: "center", backgroundColor: r.own ? (t.name === "print" ? "#e6fbfb" : t.heroBg) : ri % 2 ? t.raised : t.surface, borderTopWidth: 0.5, borderTopColor: t.line }}>
+          <Text style={{ width: "8%", padding: 6, fontSize: 8, color: t.fgSecondary }}>{r.rank}</Text>
+          <View style={{ width: "32%", padding: 6, flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 8, fontWeight: 600, color: t.fg }}>{r.company}</Text>
+            {r.own && <Text style={{ fontSize: 6.5, color: t.accentText, borderWidth: 0.5, borderColor: t.accentText, borderRadius: 2, paddingHorizontal: 2 }}>Your Page</Text>}
+          </View>
+          {table.columns.map((c) => {
+            const cell = r.cells[c.metric];
+            const color = cell && cell.change !== null && cell.change < 0 ? t.negative : t.positive;
+            return (
+              <View key={c.metric} style={{ width: `${w}%`, padding: 6, alignItems: "flex-end" }}>
+                <Text style={{ fontSize: 8, fontWeight: 600, color: cell ? t.fg : t.fgMuted }}>{cell?.value ?? "Not available"}</Text>
+                {cell && cell.change !== null && cell.change !== 0 && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                    <Triangle up={cell.change > 0} color={color} size={5} />
+                    <Text style={{ fontSize: 7, color }}>{Math.abs(cell.change * 100).toLocaleString("en-US", { maximumFractionDigits: 1 })}%</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -583,6 +721,7 @@ function Table({
   footer,
   widths,
   highlight,
+  left,
 }: {
   s: S;
   t: PdfTheme;
@@ -590,10 +729,12 @@ function Table({
   rows: string[][];
   footer?: string[];
   widths: number[];
+  /** Left-align every column (tables of text rather than numbers). */
+  left?: boolean;
   /** Column shown in teal and bold. */
   highlight?: number;
 }) {
-  const cell = (i: number): Style => ({ width: `${widths[i]}%`, paddingVertical: 5, paddingHorizontal: 6, textAlign: i === 0 || widths[i] > 40 ? "left" : "right" });
+  const cell = (i: number): Style => ({ width: `${widths[i]}%`, paddingVertical: 5, paddingHorizontal: 6, textAlign: left || i === 0 || widths[i] > 40 ? "left" : "right" });
   return (
     <View style={{ borderWidth: 0.75, borderColor: t.line, borderRadius: 6, overflow: "hidden" }}>
       <View style={{ flexDirection: "row", backgroundColor: t.tableHead }}>

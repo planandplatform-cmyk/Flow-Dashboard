@@ -17,7 +17,7 @@ export function screenshotReadingConfigured(): boolean {
 
 const SYSTEM = `You transcribe numbers from analytics screenshots and PDF reports (social media, ads, website analytics) for a marketing agency's reporting portal.
 
-Report only numbers that are printed on screen. Never estimate, calculate, or fill in a value from a chart's shape. If a number is cut off, blurry, or ambiguous, leave it out and say so in notes, or report it with low confidence.
+Report only numbers that are printed on screen. Durations such as watch time are reported in minutes (4h 58m is 298). Never estimate, calculate, or fill in a value from a chart's shape. If a number is cut off, blurry, or ambiguous, leave it out and say so in notes, or report it with low confidence.
 
 Report the totals for the selected date range. Ignore comparison figures (percent changes, "vs previous period" values, previous-period totals) and ignore rates such as engagement rate, CTR, or cost per result: the portal calculates those itself.
 
@@ -35,7 +35,9 @@ export async function readScreenshots(images: ScreenshotImage[], platform: Scree
 Metric keys you may report, with the labels this platform uses:
 ${metricGuide(platform)}
 
-Also report any audience or discovery breakdowns shown as percentages (age, gender, country, city, language, where views came from such as Feed or Reels, followers vs non-followers, engagement by content format, and for LinkedIn job function, seniority, industry, company size).
+Also report any audience or discovery breakdowns shown as percentages (age, gender, country, city, language, where views came from such as Feed or Reels, followers vs non-followers, engagement by content format, views by content type when shown as percentages (format_views), and for LinkedIn job function, seniority, industry, company size).
+
+For LinkedIn Competitors analytics (tables ranking companies by Total followers, New followers, Total post metrics, or Total engagement metrics), report every company row in competitors: posts for Total post metrics, engagements for Total engagement metrics. Mark the row labeled "Your Page". Report the percent change under each value if shown, negative for a down arrow.
 
 Report the date range shown in the files as exact dates if visible. If only a relative range such as "Last 28 days" is shown, set date_range to null and put that text in notes.`;
 

@@ -27,6 +27,7 @@ const BREAKDOWN_LABELS: Record<BreakdownType, string> = {
   follower_status: "Views from followers vs non-followers",
   follower_status_engagement: "Engagement from followers vs non-followers",
   format_engagement: "Engagement by content format",
+  format_views: "Views by content type",
   job_function: "Job function",
   seniority: "Seniority",
   industry: "Industry",
@@ -40,9 +41,16 @@ const DEFAULT_BUCKETS: Partial<Record<BreakdownType, string[]>> = {
   follower_status_engagement: ["Non-followers", "Followers"],
   discovery_surface: ["Feed", "Reels", "Explore", "Search", "Profile", "Other"],
   format_engagement: ["Reels", "Photos", "Link Posts", "Carousels", "Other"],
+  format_views: ["Reels", "Photos", "Multi photo", "Videos", "Text", "Other"],
 };
 
-const DIMENSION_LABELS: Record<string, string> = { channel: "Channel", landing_page: "Landing page", product: "Product" };
+const DIMENSION_LABELS: Record<string, string> = {
+  channel: "Channel",
+  landing_page: "Landing page",
+  product: "Product",
+  competitor: "Competitor (company name)",
+  own_page: "Your page (company name)",
+};
 
 function lastMonth(): { start: string; end: string } {
   const now = new Date();
