@@ -57,6 +57,12 @@ export function PeriodPicker(props: PeriodPickerProps) {
     };
   }, [open]);
 
+  // Visible feedback the moment a new period is picked: the report dims and a bar runs along the top.
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-loading", pending);
+    return () => document.documentElement.removeAttribute("data-loading");
+  }, [pending]);
+
   const go = (query: string) => {
     setOpen(false);
     startTransition(() => router.push(`?${query}`, { scroll: false }));
@@ -118,7 +124,16 @@ export function PeriodPicker(props: PeriodPickerProps) {
             →
           </button>
         )}
-        {pending && <span className="sr-only">Loading</span>}
+        {pending && (
+          <>
+            <span className="sr-only" role="status">
+              Loading
+            </span>
+            <span aria-hidden className="fixed inset-x-0 top-0 z-[60] h-0.5 overflow-hidden bg-teal-950">
+              <span className="loadbar block h-full w-1/3 bg-teal" />
+            </span>
+          </>
+        )}
       </div>
 
       {open && <div aria-hidden className="fixed inset-0 z-40 bg-page/70 sm:hidden" onClick={() => setOpen(false)} />}

@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import type { DailyRow, DateRange, MetricData, PeriodRow } from "@/lib/metrics/aggregate";
+import { METRICS } from "@/lib/metrics/config";
 import type { DataSource } from "@/lib/metrics/types";
 import { isDemoMode } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -92,36 +93,26 @@ export { isFfm };
 
 const PAGE = 1000; // PostgREST default max rows per request
 
-type Page<T> = { data: T[] | null; error: { message: string } | null; count?: number | null };
+type Page<T> = { data: T[] | null; error: { message: string } | null };
 
 /**
- * Page through a query so large ranges are never silently truncated. The
- * first page also returns the row count, so the rest load in parallel.
+ * Page through a query so large ranges are never silently truncated. Pages
+ * after the first load several at a time; no row count is asked for, since
+ * counting a large table costs more than the extra page requests.
  */
-async function fetchAll<T>(build: (from: number, to: number, withCount: boolean) => PromiseLike<Page<T>>): Promise<T[]> {
-  const first = await build(0, PAGE - 1, true);
+async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<Page<T>>): Promise<T[]> {
+  const first = await build(0, PAGE - 1);
   if (first.error) throw new Error(first.error.message);
   const out = [...(first.data ?? [])];
   if (out.length < PAGE) return out;
-  const total = first.count ?? null;
-  if (total === null) {
-    for (let from = PAGE; ; from += PAGE) {
-      const { data, error } = await build(from, from + PAGE - 1, false);
+  for (let from = PAGE; ; from += PAGE * 4) {
+    const pages = await Promise.all([0, 1, 2, 3].map((i) => build(from + i * PAGE, from + (i + 1) * PAGE - 1)));
+    for (const { data, error } of pages) {
       if (error) throw new Error(error.message);
       out.push(...(data ?? []));
       if (!data || data.length < PAGE) return out;
     }
   }
-  const starts: number[] = [];
-  for (let from = PAGE; from < total; from += PAGE) starts.push(from);
-  for (let i = 0; i < starts.length; i += 6) {
-    const pages = await Promise.all(starts.slice(i, i + 6).map((from) => build(from, from + PAGE - 1, false)));
-    for (const { data, error } of pages) {
-      if (error) throw new Error(error.message);
-      out.push(...(data ?? []));
-    }
-  }
-  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +158,37 @@ export interface MetricQuery {
   keys?: string[];
   /** Skip breakdown rows (by channel, page...): enough for trend charts. */
   totalsOnly?: boolean;
+  /**
+   * Monthly totals instead of daily rows (needs keys). For charts by month:
+   * the database adds up each month, so far fewer rows come back.
+   */
+  monthly?: boolean;
+}
+
+interface MonthlyRow {
+  metric_key: string;
+  month: string;
+  total: number | string;
+  n: number;
+  last_date: string;
+  last_value: number | string;
+}
+
+/**
+ * One row per metric and month, shaped like daily rows so the resolver rolls
+ * months up with each metric's own rule: a sum on the 1st, the month's last
+ * reading on its date, or the month's average. Null if the database function
+ * is not installed yet (the caller then reads daily rows).
+ */
+async function monthlyRows(supabase: Awaited<ReturnType<typeof createClient>>, clientId: string, range: DateRange, keys: string[]): Promise<DailyRow[] | null> {
+  const { data, error } = await supabase.rpc("metric_monthly", { p_client_id: clientId, p_start: range.start, p_end: range.end, p_keys: keys });
+  if (error) return null;
+  return ((data ?? []) as MonthlyRow[]).map((r) => {
+    const type = METRICS[r.metric_key]?.aggregation.type;
+    if (type === "last") return { metric_key: r.metric_key, date: r.last_date, value: Number(r.last_value), dimension: "", dimension_value: "" };
+    if (type === "average") return { metric_key: r.metric_key, date: r.month, value: Number(r.total) / (r.n || 1), dimension: "", dimension_value: "" };
+    return { metric_key: r.metric_key, date: r.month, value: Number(r.total), dimension: "", dimension_value: "" };
+  });
 }
 
 /**
@@ -194,23 +216,25 @@ export async function getMetricData(clientId: string, range: DateRange, query: M
   }
 
   const supabase = await createClient();
-  const count = (withCount: boolean) => (withCount ? ({ count: "exact" } as const) : undefined);
-  const [daily, period, ads] = await Promise.all([
-    fetchAll<DailyRow>((from, to, withCount) => {
+  const readDaily = () =>
+    fetchAll<DailyRow>((from, to) => {
       let q = supabase
         .from("metrics_daily")
-        .select("metric_key, date, value, dimension, dimension_value", count(withCount))
+        .select("metric_key, date, value, dimension, dimension_value")
         .eq("client_id", clientId)
         .gte("date", range.start)
         .lte("date", range.end);
       if (wanted) q = q.in("metric_key", [...wanted]);
       if (query.totalsOnly) q = q.eq("dimension", "");
       return q.order("id").range(from, to);
-    }),
-    fetchAll<PeriodRow>((from, to, withCount) => {
+    });
+  const [daily, period, ads] = await Promise.all([
+    // Monthly totals when asked (falls back to daily rows if the database function is missing).
+    query.monthly && wanted ? monthlyRows(supabase, clientId, range, [...wanted]).then((m) => m ?? readDaily()) : readDaily(),
+    fetchAll<PeriodRow>((from, to) => {
       let q = supabase
         .from("metrics_period")
-        .select("metric_key, period_start, period_end, value, dimension, dimension_value", count(withCount))
+        .select("metric_key, period_start, period_end, value, dimension, dimension_value")
         .eq("client_id", clientId)
         // Any period overlapping the range; the resolver prorates partial ones.
         .lte("period_start", range.end)
@@ -220,10 +244,10 @@ export async function getMetricData(clientId: string, range: DateRange, query: M
       return q.order("id").range(from, to);
     }),
     needAds
-      ? fetchAll<AdMetricsDailyRow>((from, to, withCount) =>
+      ? fetchAll<AdMetricsDailyRow>((from, to) =>
           supabase
             .from("ad_metrics_daily")
-            .select("date, spend, impressions, reach, clicks, leads", count(withCount))
+            .select("date, spend, impressions, reach, clicks, leads")
             .eq("client_id", clientId)
             .gte("date", range.start)
             .lte("date", range.end)

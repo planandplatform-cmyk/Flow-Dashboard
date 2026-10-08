@@ -112,6 +112,14 @@ begin
     end if;
   end loop;
 
+  -- Monthly totals for charts follow the same rules: own client only.
+  if (select count(*) from public.metric_monthly('00000000-0000-4000-b000-00000000000b', '2026-01-01', '2026-12-31', array['ga4_sessions'])) <> 0 then
+    raise exception 'FAIL: viewer A can total client B metrics';
+  end if;
+  if (select total from public.metric_monthly('00000000-0000-4000-b000-00000000000a', '2026-01-01', '2026-12-31', array['ga4_sessions'])) <> 10 then
+    raise exception 'FAIL: viewer A must total their own metrics';
+  end if;
+
   -- Only published commentary, only their own.
   if (select count(*) from public.monthly_commentary) <> 1
      or (select headline from public.monthly_commentary) <> 'A published' then

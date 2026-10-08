@@ -221,7 +221,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
 
   const [allData, trendData, rawCommentary, allPosts, allSnapshots, allAnnotations] = await Promise.all([
     getMetricData(client.id, fetchRange),
-    getMetricData(client.id, trendRange, { keys: metricDependencies([...trendKeys, ...socialTrendKeys]), totalsOnly: true }),
+    getMetricData(client.id, trendRange, { keys: metricDependencies([...trendKeys, ...socialTrendKeys]), totalsOnly: true, monthly: true }),
     period.month ? getCommentary(client.id, period.month) : Promise.resolve(null),
     getTopPosts(client.id, range, 8),
     getAudienceSnapshots(client.id, range),
