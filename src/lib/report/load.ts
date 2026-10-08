@@ -22,7 +22,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource, type SocialSource } from "@/lib/metrics/types";
 import { compareWindow, PRESETS, resolvePeriod } from "./period";
 import { buildSocial, NOT_AVAILABLE } from "./social";
-import { buildTrends, metricDependencies, TREND_KEYS, trendFetchRange, trendMonths } from "./trends";
+import { buildSocialGrowth, buildTrends, metricDependencies, TREND_KEYS, trendFetchRange, trendMonths } from "./trends";
 
 /** Three headline tiles per platform, as in the monthly report. */
 export const PLATFORM_TILES: Record<SocialSource, { keys: [string, string, string]; headline: [string, string] }> = {
@@ -31,6 +31,9 @@ export const PLATFORM_TILES: Record<SocialSource, { keys: [string, string, strin
   tiktok: { keys: ["tt_followers", "tt_views", "tt_profile_views"], headline: ["tt_views", "tt_interactions"] },
   linkedin: { keys: ["li_followers", "li_impressions", "li_page_views"], headline: ["li_impressions", "li_interactions"] },
 };
+
+/** Report section ids (and menu anchors) for each social channel. */
+export const CHANNEL_IDS: Record<SocialSource, string> = { meta_facebook: "facebook", meta_instagram: "instagram", tiktok: "tiktok", linkedin: "linkedin" };
 
 /** Candidates for the month-over-month grid; only ones with data are shown. */
 export const MOM_KEYS = [
@@ -208,11 +211,17 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const months = trendMonths(range);
   const trendRange = trendFetchRange(months);
   const trendKeys = TREND_KEYS.filter((k) => METRICS[k].source === "combined" || enabled.has(METRICS[k].source));
+  // Each social channel's own chart: its overview measures plus its headline tiles.
+  const channelKeys = (src: SocialSource) => {
+    const o = SOCIAL_OVERVIEW_KEYS[src];
+    return [...new Set([o.views, o.interactions, o.followers, o.netNew, ...PLATFORM_TILES[src].keys])];
+  };
+  const socialTrendKeys = SOCIAL_SOURCES.filter((s) => enabled.has(s)).flatMap(channelKeys);
   const annotationRange: DateRange = { start: [months[0], range.start].sort()[0], end: [trendRange.end, range.end].sort().at(-1)! };
 
   const [allData, trendData, rawCommentary, allPosts, allSnapshots, allAnnotations] = await Promise.all([
     getMetricData(client.id, fetchRange),
-    getMetricData(client.id, trendRange, { keys: metricDependencies(trendKeys), totalsOnly: true }),
+    getMetricData(client.id, trendRange, { keys: metricDependencies([...trendKeys, ...socialTrendKeys]), totalsOnly: true }),
     period.month ? getCommentary(client.id, period.month) : Promise.resolve(null),
     getTopPosts(client.id, range, 8),
     getAudienceSnapshots(client.id, range),
@@ -365,7 +374,25 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const googleKeywords = googleTop("keyword");
   const momKeys = compareRange ? MOM_KEYS.filter((k) => val(k) !== null && val(k, compareRange) !== null) : [];
 
-  const trends = buildTrends(new MetricResolver(onlyEnabledSources(trendData, enabled), { prorate: false }), trendKeys, months, today, (k) => {
+  const trendResolver = new MetricResolver(onlyEnabledSources(trendData, enabled), { prorate: false });
+  // Per channel: 12 months against the same months a year earlier, one series per measure.
+  const channelTrends = Object.fromEntries(socials.map((src) => [src, buildTrends(trendResolver, channelKeys(src), months, today)])) as Partial<
+    Record<SocialSource, ReturnType<typeof buildTrends>>
+  >;
+  // All social channels together, when there is more than one.
+  const socialGrowth =
+    socials.length > 1
+      ? buildSocialGrowth(
+          trendResolver,
+          socials.map((src) => {
+            const o = SOCIAL_OVERVIEW_KEYS[src];
+            return { source: src, label: SOURCE_LABELS[src], keys: { followers: o.followers, netNew: o.netNew, views: o.views, interactions: o.interactions } };
+          }),
+          months,
+          today,
+        )
+      : [];
+  const trends = buildTrends(trendResolver, trendKeys, months, today, (k) => {
     const def = METRICS[k];
     return def.source === "combined" ? def.label : `${SOURCE_LABELS[def.source]} ${def.label}`;
   });
@@ -384,8 +411,9 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     { id: "summary", label: "Summary", show: true },
     // Social media terms only when the client has a social channel turned on.
     { id: "terms", label: "Key terms", show: enabledSocial.length > 0 },
-    { id: "social", label: "Social", show: socials.length > 0 },
-    { id: "platforms", label: "Platforms", show: socials.length > 0 },
+    // Each social channel is its own section; "All social" combines them when there are several.
+    { id: "social", label: "All social", show: socials.length > 1 },
+    ...socials.map((src) => ({ id: CHANNEL_IDS[src], label: SOURCE_LABELS[src], show: true })),
     { id: "website", label: "Website", show: hasWebsite },
     { id: "google-search", label: "Google Search", show: hasSearch },
     { id: "content", label: "Content", show: showContent },
@@ -444,6 +472,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     annotations,
     socials,
     social,
+    channelTrends,
+    socialGrowth,
     hasWebsite,
     websiteTiles,
     salesTiles,

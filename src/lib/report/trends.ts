@@ -116,3 +116,58 @@ export function buildTrends(
     })
     .filter((s) => s.points.filter((p) => p.value !== null).length >= 2);
 }
+
+/** One line per platform plus their total, month by month, for one kind of measure. */
+export interface GrowthMetric {
+  id: "followers" | "netNew" | "views" | "interactions";
+  label: string;
+  format: (typeof METRICS)[string]["format"];
+  lines: { source: DataSource; label: string; key: string; inTotal: boolean }[];
+  note: string | null;
+  points: ({ month: string; label: string; fullLabel: string; partial: boolean; total: number | null } & Record<string, number | null | string | boolean>)[];
+}
+
+const GROWTH: { id: GrowthMetric["id"]; label: string }[] = [
+  { id: "followers", label: "Audience" },
+  { id: "netNew", label: "Net new followers" },
+  { id: "views", label: "Views and impressions" },
+  { id: "interactions", label: "Interactions" },
+];
+
+/**
+ * Combined social growth: for each measure, every platform's monthly value
+ * and the total. LinkedIn impressions are a different measure from views, so
+ * they are drawn but not added into the views total (as in Social Media Reach).
+ */
+export function buildSocialGrowth(
+  resolver: MetricResolver,
+  platforms: { source: DataSource; label: string; keys: Record<GrowthMetric["id"], string> }[],
+  months: string[],
+  today: ISODate,
+): GrowthMetric[] {
+  return GROWTH.map(({ id, label }) => {
+    const lines = platforms.map((p) => ({ source: p.source, label: p.label, key: p.keys[id], inTotal: !(id === "views" && p.source === "linkedin") }));
+    const points = months.map((month) => {
+      const r = monthRange(month);
+      const row: GrowthMetric["points"][number] = { month, label: formatMonthShort(month), fullLabel: formatMonth(month), partial: r.end >= today, total: null };
+      let total: number | null = null;
+      for (const line of lines) {
+        const v = resolver.resolve(line.key, r).value;
+        row[line.source] = v;
+        if (v !== null && line.inTotal) total = (total ?? 0) + v;
+      }
+      row.total = total;
+      return row;
+    });
+    const withData = lines.filter((l) => points.filter((p) => p[l.source] !== null).length >= 2);
+    const excluded = withData.some((l) => !l.inTotal);
+    return {
+      id,
+      label,
+      format: METRICS[lines[0]?.key]?.format ?? "number",
+      lines: withData,
+      note: excluded ? "LinkedIn reports impressions, a different measure from views, so it is shown but not added into the total." : null,
+      points,
+    };
+  }).filter((g) => g.lines.length > 0);
+}

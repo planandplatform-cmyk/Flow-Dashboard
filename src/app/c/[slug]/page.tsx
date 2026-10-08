@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ChannelTrendChart, SocialGrowthChart } from "@/components/channel-charts";
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
@@ -18,7 +19,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, AUCTION_KEYS, AUCTION_LABELS, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS } from "@/lib/report/load";
+import { ADS_TABLE, AUCTION_KEYS, CHANNEL_IDS, AUCTION_LABELS, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS } from "@/lib/report/load";
 import { describeRange, periodQuery } from "@/lib/report/period";
 
 export const metadata: Metadata = { title: "Performance Report" };
@@ -63,6 +64,8 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     annotations,
     socials,
     social,
+    channelTrends,
+    socialGrowth,
     hasWebsite,
     websiteTiles,
     salesTiles,
@@ -212,12 +215,12 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
           </Section>
         )}
 
-        {/* 3. Social overview */}
-        {socials.length > 0 && (
+        {/* 3. All social channels together (only when there are several) */}
+        {socials.length > 1 && (
           <Section
             id="social"
             number={next()}
-            title="Social Media Performance Overview"
+            title="All Social Channels"
             intro="Each platform keeps its own metric names and the dates it supplied. Only measures with the same name are combined."
           >
             <DataTable
@@ -246,6 +249,11 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                   : undefined
               }
             />
+            {socialGrowth.length > 0 && (
+              <div className="mt-6">
+                <SocialGrowthChart metrics={socialGrowth} colors={Object.fromEntries(social.platforms.map((p) => [p.source, p.color]))} />
+              </div>
+            )}
             {social.visibilityBars.length > 1 && (
               <Card className="mt-6 p-5">
                 <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">Supplied visibility measures by platform</h3>
@@ -256,29 +264,29 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
           </Section>
         )}
 
-        {/* 4. Platform breakdown */}
-        {socials.length > 0 && (
-          <Section id="platforms" number={next()} title="Platform Performance Breakdown">
-            <div className="space-y-6">
-              {social.platforms.map((p) => (
-                <Card key={p.source} className="border-l-4 border-l-teal p-5 sm:p-6">
-                  <PlatformChip source={p.source} label={p.label} />
-                  <h3 className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">{p.headline}</h3>
-                  {p.body && <p className="mt-2 max-w-3xl text-sm leading-relaxed text-fg-secondary sm:text-base">{p.body}</p>}
-                  {p.sourcePeriod && <p className="mt-2 text-xs text-fg-muted">Platform totals for {p.sourcePeriod}, as supplied.</p>}
-                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {p.tiles.map((t) => (
-                      <KpiTile key={t.key} metricKey={t.key} value={t.numeric} comparison={t.comparison} caption={t.caption ?? undefined} />
-                    ))}
-                  </div>
-                  {p.missingNote && <p className="mt-4 text-xs text-fg-muted">{p.missingNote}</p>}
-                </Card>
-              ))}
-            </div>
-            {social.competitors && (
+        {/* 4. One section per social channel */}
+        {social.platforms.map((p) => (
+          <Section key={p.source} id={CHANNEL_IDS[p.source]} number={next()} title={`${p.label} Performance`}>
+            <Card className="border-l-4 border-l-teal p-5 sm:p-6">
+              <PlatformChip source={p.source} label={p.label} />
+              <h3 className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">{p.headline}</h3>
+              {p.body && <p className="mt-2 max-w-3xl text-sm leading-relaxed text-fg-secondary sm:text-base">{p.body}</p>}
+              {p.sourcePeriod && <p className="mt-2 text-xs text-fg-muted">Platform totals for {p.sourcePeriod}, as supplied.</p>}
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {p.tiles.map((t) => (
+                  <KpiTile key={t.key} metricKey={t.key} value={t.numeric} comparison={t.comparison} caption={t.caption ?? undefined} />
+                ))}
+              </div>
+              {p.missingNote && <p className="mt-4 text-xs text-fg-muted">{p.missingNote}</p>}
+            </Card>
+            {(channelTrends[p.source]?.length ?? 0) > 0 && (
+              <div className="mt-6">
+                <ChannelTrendChart series={channelTrends[p.source]!} color={p.color} channel={p.label} />
+              </div>
+            )}
+            {p.source === "linkedin" && social.competitors && (
               <div className="mt-8">
                 <div className="mb-3 flex flex-wrap items-center gap-3">
-                  <PlatformChip source="linkedin" label="LinkedIn" />
                   <h3 className="text-lg font-semibold">Competitor comparison</h3>
                   <span className="text-xs text-fg-muted">As shown by LinkedIn for {social.competitors.period}</span>
                 </div>
@@ -286,7 +294,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
               </div>
             )}
           </Section>
-        )}
+        ))}
 
         {/* Website */}
         {hasWebsite && (
