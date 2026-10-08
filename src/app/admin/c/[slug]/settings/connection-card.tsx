@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { Button, Field, Notice, inputClass } from "@/components/form";
-import type { Ga4Status } from "@/lib/data/admin";
+import type { ConnectionStatus } from "@/lib/data/admin";
 import type { SyncState } from "./sync-actions";
 
 type FormAction = (prev: SyncState, form: FormData) => Promise<SyncState>;
@@ -17,7 +17,19 @@ function StateNotice({ state }: { state: SyncState }) {
   return <Notice tone={state.status === "done" ? "success" : "error"}>{state.message}</Notice>;
 }
 
-export function Ga4Connection({
+/** What differs between channels: names and where to find things. */
+export interface ChannelCopy {
+  title: string;
+  blurb: string;
+  idLabel: string;
+  placeholder: string;
+  hint: string;
+  accessHelp: string;
+  inputMode?: "numeric" | "url";
+}
+
+export function ConnectionCard({
+  copy,
   status,
   serviceEmail,
   ready,
@@ -27,7 +39,8 @@ export function Ga4Connection({
   pullHistory,
   disconnect,
 }: {
-  status: Ga4Status | null;
+  copy: ChannelCopy;
+  status: ConnectionStatus | null;
   serviceEmail: string | null;
   ready: boolean;
   demo: boolean;
@@ -48,22 +61,27 @@ export function Ga4Connection({
     <div className="space-y-5 rounded-xl border border-line bg-surface p-5 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-semibold text-fg">Google Analytics (GA4)</p>
+          <p className="font-semibold text-fg">{copy.title}</p>
           <p className="mt-0.5 text-fg-secondary">
             {connected
-              ? `Property ${status!.propertyId}. ${status!.lastSyncedAt ? `Last updated ${when(status!.lastSyncedAt)}.` : "Not synced yet."}`
-              : "Pulls website numbers every night, read-only."}
+              ? `${status!.propertyId}. ${status!.lastSyncedAt ? `Last updated ${when(status!.lastSyncedAt)}.` : "Not synced yet."}`
+              : copy.blurb}
           </p>
         </div>
         {connected && (
-          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${status!.status === "error" ? "bg-negative/10 text-negative" : "bg-teal-950 text-teal-100"}`}>
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${status!.status === "error" ? "bg-negative/10 text-negative" : "bg-teal-950 text-teal-100"}`}
+          >
             {status!.status === "error" ? "Needs attention" : "Connected"}
           </span>
         )}
       </div>
 
       {!ready && !demo && (
-        <Notice tone="info">Add GOOGLE_SERVICE_ACCOUNT_KEY, SUPABASE_SECRET_KEY and CRON_SECRET in Vercel, then redeploy. See docs/connect-google-analytics.md.</Notice>
+        <Notice tone="info">
+          Add GOOGLE_SERVICE_ACCOUNT_KEY, SUPABASE_SECRET_KEY and CRON_SECRET in Vercel, then redeploy. See
+          docs/connect-google-analytics.md.
+        </Notice>
       )}
       {connected && status!.status === "error" && status!.lastError && <Notice tone="error">{status!.lastError}</Notice>}
 
@@ -81,19 +99,19 @@ export function Ga4Connection({
               {copied ? "Copied" : "Copy"}
             </Button>
           </div>
-          <p className="mt-1.5 text-xs text-fg-muted">In the client&apos;s GA4: Admin, Property access management, add this email as a Viewer.</p>
+          <p className="mt-1.5 text-xs text-fg-muted">{copy.accessHelp}</p>
         </div>
       )}
 
       <form action={connectAction} className="space-y-3">
         <StateNotice state={connectState} />
-        <Field label="GA4 Property ID" htmlFor="property_id" hint="GA4 Admin, Property details. Numbers only, not the G- ID. Connecting pulls the last 13 months.">
+        <Field label={copy.idLabel} htmlFor={`${copy.title}-account`} hint={copy.hint}>
           <div className="flex gap-2">
             <input
-              id="property_id"
-              name="property_id"
-              inputMode="numeric"
-              placeholder="412345678"
+              id={`${copy.title}-account`}
+              name="account_id"
+              inputMode={copy.inputMode}
+              placeholder={copy.placeholder}
               defaultValue={status?.propertyId ?? ""}
               className={inputClass}
               disabled={demo || !ready}
@@ -108,7 +126,12 @@ export function Ga4Connection({
       {connected && (
         <>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" disabled={busy || !ready} onClick={() => start(async () => setState(await syncNow()))}>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy || !ready}
+              onClick={() => start(async () => setState(await syncNow()))}
+            >
               {pending ? "Working..." : "Sync last 30 days"}
             </Button>
             <Button type="button" variant="danger" disabled={busy} onClick={() => start(async () => setState(await disconnect()))}>
@@ -127,7 +150,7 @@ export function Ga4Connection({
                 {pulling ? "Pulling..." : "Pull"}
               </Button>
             </div>
-            <p className="text-xs text-fg-muted">Replaces any GA4 numbers uploaded for those dates.</p>
+            <p className="text-xs text-fg-muted">Replaces any numbers uploaded for this channel for those dates.</p>
           </form>
         </>
       )}
@@ -144,7 +167,11 @@ export function Ga4Connection({
                   {r.period_start} to {r.period_end}
                 </span>
                 <span className={r.status === "failed" ? "text-negative" : r.status === "succeeded" ? "text-teal-100" : ""}>
-                  {r.status === "succeeded" ? `${r.rows_upserted.toLocaleString("en-US")} numbers` : r.status === "failed" ? "Failed" : "Running"}
+                  {r.status === "succeeded"
+                    ? `${r.rows_upserted.toLocaleString("en-US")} numbers`
+                    : r.status === "failed"
+                      ? "Failed"
+                      : "Running"}
                 </span>
               </li>
             ))}

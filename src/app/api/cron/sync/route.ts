@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cronAuthorized } from "@/lib/connectors/cron-auth";
 import { googleConfigured } from "@/lib/connectors/google-auth";
-import { syncAllGa4 } from "@/lib/connectors/run";
+import { syncAll } from "@/lib/connectors/run";
 import { adminApiConfigured } from "@/lib/supabase/admin";
 
 export const maxDuration = 300;
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   if (!googleConfigured() || !adminApiConfigured()) {
     return NextResponse.json({ skipped: "GOOGLE_SERVICE_ACCOUNT_KEY or SUPABASE_SECRET_KEY is not set" });
   }
-  const results = await syncAllGa4();
+  const results = await syncAll();
   return NextResponse.json(
     { clients: results.length, failed: results.filter((r) => !r.ok).length, results },
     { headers: { "cache-control": "no-store" } },

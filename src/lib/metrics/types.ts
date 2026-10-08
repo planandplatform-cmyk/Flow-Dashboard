@@ -4,6 +4,7 @@ export const DATA_SOURCES = [
   "meta_instagram",
   "meta_ads",
   "google_ads",
+  "search_console",
   "shopify",
   "tiktok",
   "linkedin",
@@ -20,6 +21,7 @@ export const SOURCE_LABELS: Record<DataSource, string> = {
   tiktok: "TikTok",
   linkedin: "LinkedIn",
   google_ads: "Google Ads",
+  search_console: "Google Search",
 };
 
 export const SOCIAL_SOURCES = ["meta_facebook", "meta_instagram", "tiktok", "linkedin"] as const;
@@ -73,6 +75,8 @@ export interface MetricDefinition {
   upIsGood: boolean;
   /** Breakdown dimensions this metric can be stored with in metrics_daily. */
   dimensions?: string[];
+  /** A building block for another metric (never shown on its own or in the glossary). */
+  internal?: boolean;
   /** Glossary term this metric maps to, if any. */
   glossaryTerm?: string;
 }

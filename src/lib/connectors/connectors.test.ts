@@ -6,6 +6,7 @@ vi.mock("server-only", () => ({}));
 import { cronAuthorized } from "./cron-auth";
 import { ga4ErrorMessage, ga4Requests, mapGa4Report } from "./ga4-map";
 import { signedAssertion } from "./google-auth";
+import { gscRequests, mapGscReport, parseSiteUrl } from "./gsc-map";
 import { parsePropertyId } from "./property-id";
 import { clipRange, replaceWindow, syncWindow } from "./sync-plan";
 
@@ -61,6 +62,55 @@ describe("GA4 reports", () => {
     expect(ga4ErrorMessage(403, "User does not have sufficient permissions", "bot@x.iam.gserviceaccount.com")).toContain("bot@x.iam.gserviceaccount.com");
     expect(ga4ErrorMessage(403, "Google Analytics Data API has not been used in project 123", null)).toContain("Analytics Data API");
     expect(ga4ErrorMessage(404, "not found", null)).toContain("Property ID");
+  });
+});
+
+describe("GA4 time and sales", () => {
+  it("stores engagement time in minutes and skips zero sales", () => {
+    const [daily] = ga4Requests({ start: "2026-09-01", end: "2026-09-30" });
+    const out = mapGa4Report(daily, {
+      dimensionHeaders: [{ name: "date" }],
+      metricHeaders: [{ name: "userEngagementDuration" }, { name: "purchaseRevenue" }, { name: "transactions" }],
+      rows: [
+        { dimensionValues: [{ value: "20260903" }], metricValues: [{ value: "600" }, { value: "0" }, { value: "0" }] },
+        { dimensionValues: [{ value: "20260904" }], metricValues: [{ value: "120" }, { value: "249.5" }, { value: "2" }] },
+      ],
+    });
+    expect(out.daily.map((r) => [r.metric_key, r.date, r.value])).toEqual([
+      ["ga4_engagement_minutes", "2026-09-03", 10],
+      ["ga4_engagement_minutes", "2026-09-04", 2],
+      ["ga4_revenue", "2026-09-04", 249.5],
+      ["ga4_transactions", "2026-09-04", 2],
+    ]);
+  });
+});
+
+describe("Search Console", () => {
+  it("asks for daily totals and the top search terms and pages per month", () => {
+    const reqs = gscRequests({ start: "2026-09-08", end: "2026-10-07" });
+    expect(reqs.map((r) => r.id)).toEqual(["daily", "month-queries", "month-pages", "month-queries", "month-pages"]);
+    expect(reqs[1].body).toMatchObject({ startDate: "2026-09-01", endDate: "2026-09-30", dimensions: ["query"] });
+  });
+
+  it("stores position weighted by impressions so it averages correctly", () => {
+    const reqs = gscRequests({ start: "2026-09-01", end: "2026-09-30" });
+    const daily = mapGscReport(reqs[0], { rows: [{ keys: ["2026-09-02"], clicks: 5, impressions: 200, ctr: 0.025, position: 7.5 }] });
+    expect(daily.daily).toEqual([
+      { source: "search_console", metric_key: "gsc_clicks", date: "2026-09-02", value: 5, dimension: "", dimension_value: "" },
+      { source: "search_console", metric_key: "gsc_impressions", date: "2026-09-02", value: 200, dimension: "", dimension_value: "" },
+      { source: "search_console", metric_key: "gsc_position_weighted", date: "2026-09-02", value: 1500, dimension: "", dimension_value: "" },
+    ]);
+    const pages = mapGscReport(reqs[2], { rows: [{ keys: ["https://www.example.com/roofing?x=1"], clicks: 3, impressions: 40, ctr: 0.075, position: 4 }] });
+    expect(pages.period[0]).toMatchObject({ dimension: "page", dimension_value: "/roofing?x=1", period_start: "2026-09-01", period_end: "2026-09-30" });
+  });
+
+  it("reads the site the way Search Console names it", () => {
+    expect(parseSiteUrl("example.com")).toBe("sc-domain:example.com");
+    expect(parseSiteUrl("www.example.com/")).toBe("sc-domain:example.com");
+    expect(parseSiteUrl("sc-domain:Example.com")).toBe("sc-domain:example.com");
+    expect(parseSiteUrl("https://www.example.com")).toBe("https://www.example.com/");
+    expect(parseSiteUrl("https://www.example.com/blog")).toBe("https://www.example.com/blog/");
+    expect(parseSiteUrl("not a site")).toBeNull();
   });
 });
 

@@ -257,6 +257,46 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
           </View>
         )}
 
+        {/* Google Search */}
+        {r.hasSearch && (
+          <View style={s.section}>
+            <View wrap={false}>
+              <Heading s={s} n={next()} title="Google Search Rankings" />
+              {narratives.search_console?.body && <Text style={[s.body, { marginBottom: 8 }]}>{narratives.search_console.body}</Text>}
+              <View style={s.row}>
+                {["gsc_clicks", "gsc_impressions", "gsc_position", "gsc_ctr"].map((k) => (
+                  <Kpi key={k} s={s} t={t} metricKey={k} value={val(k)} comparison={mom(k)} />
+                ))}
+              </View>
+            </View>
+            {(
+              [
+                ["Top search terms", "Search term", r.searchQueries],
+                ["Top pages from Google", "Page", r.searchPages],
+              ] as const
+            )
+              .filter(([, , rows]) => rows.length > 0)
+              .map(([title, first, rows]) => (
+                <View key={title} style={{ marginTop: 10 }} wrap={false}>
+                  <Text style={[s.label, { marginBottom: 4 }]}>{title}</Text>
+                  <Table
+                    s={s}
+                    t={t}
+                    widths={[44, 14, 14, 14, 14]}
+                    head={[first, "Clicks", "Impressions", "Click Rate", "Avg. Position"]}
+                    rows={rows.map((x) => [
+                      x.name,
+                      formatMetric("gsc_clicks", x.clicks),
+                      formatMetric("gsc_impressions", x.impressions),
+                      formatMetric("gsc_ctr", x.ctr),
+                      formatMetric("gsc_position", x.position),
+                    ])}
+                  />
+                </View>
+              ))}
+          </View>
+        )}
+
         {/* Content */}
         {r.show.content && (
           <View style={s.section}>

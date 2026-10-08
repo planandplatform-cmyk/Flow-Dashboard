@@ -105,7 +105,7 @@ export async function siteUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-export interface Ga4Status {
+export interface ConnectionStatus {
   propertyId: string | null;
   status: string;
   lastSyncedAt: string | null;
@@ -113,17 +113,17 @@ export interface Ga4Status {
   runs: { id: string; trigger: string; status: string; period_start: string; period_end: string; rows_upserted: number; error: string | null; started_at: string }[];
 }
 
-/** GA4 connection and recent syncs for the Settings page. */
-export async function getGa4Status(clientId: string): Promise<Ga4Status | null> {
+/** A synced channel's connection and recent syncs, for the Settings page. */
+export async function getConnectionStatus(clientId: string, source: "ga4" | "search_console"): Promise<ConnectionStatus | null> {
   if (isDemoMode()) return null;
   const supabase = await createClient();
   const [{ data: c }, { data: runs }] = await Promise.all([
-    supabase.from("connections").select("external_account_id, status, last_synced_at, last_error").eq("client_id", clientId).eq("source", "ga4").maybeSingle(),
+    supabase.from("connections").select("external_account_id, status, last_synced_at, last_error").eq("client_id", clientId).eq("source", source).maybeSingle(),
     supabase
       .from("sync_runs")
       .select("id, trigger, status, period_start, period_end, rows_upserted, error, started_at")
       .eq("client_id", clientId)
-      .eq("source", "ga4")
+      .eq("source", source)
       .order("started_at", { ascending: false })
       .limit(5),
   ]);
@@ -133,6 +133,6 @@ export async function getGa4Status(clientId: string): Promise<Ga4Status | null> 
     status: c.status,
     lastSyncedAt: c.last_synced_at,
     lastError: c.last_error,
-    runs: (runs ?? []) as Ga4Status["runs"],
+    runs: (runs ?? []) as ConnectionStatus["runs"],
   };
 }

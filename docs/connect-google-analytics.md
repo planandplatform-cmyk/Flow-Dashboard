@@ -1,4 +1,4 @@
-# Connect Google Analytics (GA4)
+# Connect Google Analytics (GA4) and Search Console
 
 The portal pulls each client's website numbers from GA4 every night, and pulls
 the last 13 months the moment a client is connected. It uses one Google
@@ -70,3 +70,46 @@ under **Recent syncs**. Common fixes:
 - "cannot see this GA4 property": step 1 above was skipped or used another email.
 - "API is not turned on": step 3 of the Google Cloud setup.
 - "property ID was not found": the `G-` ID was used instead of the Property ID.
+- Search Console "cannot see this site": the email was not added in Search
+  Console, or the site does not match. The error lists the sites the portal can
+  see, so copy one of those.
+
+## What it pulls (GA4, continued)
+
+- Average time on site (engagement time per visit), overall, by channel and by
+  landing page.
+- Online sales, orders, average order value and order rate, for sites with
+  GA4 ecommerce tracking (Shopify and other stores). The Online sales row only
+  appears when GA4 has sales.
+
+# Google Search Console (search rankings)
+
+Search Console shows which Google searches a client's website appears for,
+where it ranks, and how many people click. It is its own channel: turn on
+**Google Search** for a client under Settings, Details and channels.
+
+## One time: Google Cloud
+
+In the same `FFM Portal` project, search **Google Search Console API** and click
+**Enable**. Nothing changes in Vercel; the same service account key is used.
+
+## Each client
+
+1. In the client's Search Console (https://search.google.com/search-console),
+   pick the site, then **Settings**, **Users and permissions**, **Add user**.
+   Paste the service account email, permission **Restricted**, **Add**. (You need
+   Owner access to the site.)
+2. Note the site exactly as Search Console lists it: `example.com` for a domain
+   property, or `https://www.example.com/` for a URL-prefix property.
+3. In the portal: client, **Settings**, **Automatic data**, **Google Search
+   Console**, paste the site, **Connect**. It pulls the last 13 months.
+
+## What it pulls
+
+- Daily: clicks, impressions, average position and click rate for the site.
+- Monthly: the top 100 search terms and top 50 pages, each with clicks,
+  impressions, click rate and average position.
+
+Search Console data runs 2 to 3 days behind, so the last few days fill in over
+the next nightly syncs. The report shows a **Google Search Rankings** section
+when there is data.

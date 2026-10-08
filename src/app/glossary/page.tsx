@@ -23,8 +23,8 @@ async function Glossary() {
   if (!viewer) redirect("/login");
 
   const bySource = new Map<string, typeof METRICS[string][]>();
-  for (const def of Object.values(METRICS)) {
-    const label = def.source === "combined" ? "All Platforms" : SOURCE_LABELS[def.source];
+  for (const def of Object.values(METRICS).filter((m) => !m.internal)) {
+    const label = def.source === "combined" ? "All Social Platforms" : SOURCE_LABELS[def.source];
     bySource.set(label, [...(bySource.get(label) ?? []), def]);
   }
 

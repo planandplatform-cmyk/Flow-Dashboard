@@ -68,6 +68,9 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     salesTiles,
     websiteChannels,
     websitePages,
+    hasSearch,
+    searchQueries,
+    searchPages,
     hasAds,
     hasGoogleAds,
     googleCampaigns,
@@ -170,11 +173,13 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
               )}
             </div>
           </div>
-          <div className={`mt-6 grid grid-cols-1 gap-4 ${heroTiles.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-            {heroTiles.map((t) => (
-              <KpiTile key={t.key} size="lg" metricKey={t.key} label={t.label} value={val(t.key)} comparison={mom(t.key)} caption={t.caption} />
-            ))}
-          </div>
+          {heroTiles.length > 0 && (
+            <div className={`mt-6 grid grid-cols-1 gap-4 ${heroTiles.length === 3 ? "sm:grid-cols-3" : heroTiles.length === 2 ? "sm:grid-cols-2" : ""}`}>
+              {heroTiles.map((t) => (
+                <KpiTile key={t.key} size="lg" metricKey={t.key} label={t.label} value={val(t.key)} comparison={mom(t.key)} caption={t.caption} />
+              ))}
+            </div>
+          )}
           {annotations.length > 0 && (
             <ul className="mt-6 space-y-2">
               {annotations.map((a) => (
@@ -296,7 +301,8 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 </div>
               </div>
             )}
-            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Side by side while the tables are narrow; stacked once time and sales columns are added. */}
+            <div className={`mt-6 grid grid-cols-1 gap-6 ${websiteChannels.keys.length > 4 ? "" : "lg:grid-cols-2"}`}>
               {(
                 [
                   ["Sessions by channel", "Channel", websiteChannels],
@@ -325,6 +331,48 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 </div>
               ))}
             </div>
+          </Section>
+        )}
+
+        {/* Google Search */}
+        {hasSearch && (
+          <Section id="google-search" number={next()} title="Google Search Rankings" intro={narratives.search_console?.body}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {["gsc_clicks", "gsc_impressions", "gsc_position", "gsc_ctr"].map((k) => (
+                <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} />
+              ))}
+            </div>
+            {(
+              [
+                ["Top search terms", "Search term", searchQueries],
+                ["Top pages from Google", "Page", searchPages],
+              ] as const
+            )
+              .filter(([, , rows]) => rows.length > 0)
+              .map(([title, first, rows]) => (
+                <div key={title} className="mt-6">
+                  <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">{title}</h3>
+                  <DataTable
+                    caption={title}
+                    columns={[
+                      { label: first },
+                      { label: <MetricLabel metricKey="gsc_clicks" label="Clicks" />, align: "right" },
+                      { label: <MetricLabel metricKey="gsc_impressions" label="Impressions" />, align: "right" },
+                      { label: <MetricLabel metricKey="gsc_ctr" label="Click Rate" />, align: "right" },
+                      { label: <MetricLabel metricKey="gsc_position" label="Avg. Position" />, align: "right" },
+                    ]}
+                    rows={rows.map((r) => [
+                      <span key={r.name} className={first === "Page" ? "font-mono text-xs sm:text-sm" : "text-fg"}>
+                        {r.name}
+                      </span>,
+                      formatMetric("gsc_clicks", r.clicks),
+                      formatMetric("gsc_impressions", r.impressions),
+                      formatMetric("gsc_ctr", r.ctr),
+                      formatMetric("gsc_position", r.position),
+                    ])}
+                  />
+                </div>
+              ))}
           </Section>
         )}
 

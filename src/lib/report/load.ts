@@ -50,6 +50,9 @@ export const MOM_KEYS = [
   "ga4_avg_engagement_time",
   "ga4_revenue",
   "ga4_transactions",
+  "gsc_clicks",
+  "gsc_impressions",
+  "gsc_position",
   "gads_conversions",
   "gads_clicks",
   "gads_cpa",
@@ -236,13 +239,34 @@ export async function loadReport(client: Client, search: Search, opts: { publish
           .slice(0, limit)
           .map(({ bucket, value }) => ({
             name: bucket,
-            values: [value, ...keys.slice(1).map((k) => resolver.resolve(k, range, { dimension, value: bucket }).value)],
+            // No sales from a channel or page is $0, not missing.
+            values: [value, ...keys.slice(1).map((k) => resolver.resolve(k, range, { dimension, value: bucket }).value ?? (k === "ga4_revenue" ? 0 : null))],
           }))
       : [];
     return { keys, rows };
   };
   const websiteChannels = websiteTable("ga4_sessions", "channel", ["ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 10);
   const websitePages = websiteTable("ga4_page_views", "landing_page", ["ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 8);
+  // Google Search (Search Console): rankings for the search terms people used.
+  const hasSearch = enabled.has("search_console") && val("gsc_impressions") !== null;
+  const searchTable = (dimension: "query" | "page", limit: number) =>
+    hasSearch
+      ? resolver
+          .breakdown("gsc_clicks", dimension, range)
+          .slice(0, limit)
+          .map(({ bucket, value }) => {
+            const f = { dimension, value: bucket };
+            return {
+              name: bucket,
+              clicks: value,
+              impressions: resolver.resolve("gsc_impressions", range, f).value,
+              ctr: resolver.resolve("gsc_ctr", range, f).value,
+              position: resolver.resolve("gsc_position", range, f).value,
+            };
+          })
+      : [];
+  const searchQueries = searchTable("query", 15);
+  const searchPages = searchTable("page", 10);
   const hasAds = adsRange !== null && val("ads_spend", adsRange) !== null;
   const hasGoogleAds = enabled.has("google_ads") && (val("gads_spend") !== null || val("gads_clicks") !== null);
   const googleCampaigns = hasGoogleAds
@@ -299,6 +323,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     { id: "social", label: "Social", show: socials.length > 0 },
     { id: "platforms", label: "Platforms", show: socials.length > 0 },
     { id: "website", label: "Website", show: hasWebsite },
+    { id: "google-search", label: "Google Search", show: hasSearch },
     { id: "content", label: "Content", show: showContent },
     { id: "audience", label: "Audience", show: showAudience },
     { id: "discovery", label: "Discovery", show: showDiscovery },
@@ -318,20 +343,20 @@ export async function loadReport(client: Client, search: Search, opts: { publish
 
 
 
+  // Combined totals cover social media only, so they appear only when a social
+  // channel has numbers, and say so in the label.
+  const reachParts = socials
+    .filter((s) => s !== "linkedin" && val(SOCIAL_OVERVIEW_KEYS[s].views) !== null)
+    .map((s) => `${SOURCE_LABELS[s]} ${METRICS[SOCIAL_OVERVIEW_KEYS[s].views].label}`);
+  const interactionParts = socials.filter((s) => val(SOCIAL_OVERVIEW_KEYS[s].interactions) !== null).map((s) => SOURCE_LABELS[s]);
   const heroTiles = [
-    {
-      key: "total_audience_reach",
-      caption: socials
-        .filter((s) => s !== "linkedin" && val(SOCIAL_OVERVIEW_KEYS[s].views) !== null)
-        .map((s) => `${SOURCE_LABELS[s]} ${METRICS[SOCIAL_OVERVIEW_KEYS[s].views].label}`)
-        .join(" + "),
-    },
-    {
-      key: "total_interactions",
-      caption: socials.filter((s) => val(SOCIAL_OVERVIEW_KEYS[s].interactions) !== null).map((s) => SOURCE_LABELS[s]).join(" + ") + " engagement",
-    },
+    ...(reachParts.length ? [{ key: "total_audience_reach", label: "Social Media Reach", caption: `Social only: ${reachParts.join(" + ")}` }] : []),
+    ...(interactionParts.length
+      ? [{ key: "total_interactions", label: "Social Media Interactions", caption: `Social only: ${interactionParts.join(" + ")} engagement` }]
+      : []),
     ...(hasWebsite ? [{ key: "ga4_engagement_rate", caption: "Website visits that engaged", label: "Website Engagement" }] : []),
-  ] as { key: string; caption: string; label?: string }[];
+    ...(hasSearch ? [{ key: "gsc_clicks", caption: "Clicks from unpaid Google results", label: "Google Search Clicks" }] : []),
+  ].slice(0, 3) as { key: string; caption: string; label?: string }[];
 
   return {
     client,
@@ -360,6 +385,9 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     salesTiles,
     websiteChannels,
     websitePages,
+    hasSearch,
+    searchQueries,
+    searchPages,
     hasAds,
     hasGoogleAds,
     googleCampaigns,

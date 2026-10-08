@@ -31,6 +31,8 @@ export const TREND_KEYS = [
   "ga4_key_events",
   "ga4_avg_engagement_time",
   "ga4_revenue",
+  "gsc_clicks",
+  "gsc_position",
   "fb_views",
   "fb_interactions",
   "fb_followers",

@@ -54,7 +54,7 @@ async function DataPageContent(props: PageProps<"/admin/c/[slug]/data">) {
 
   const metricOptions: MetricOption[] = Object.values(METRICS)
     .filter((m) => m.source !== "combined" && m.aggregation.type !== "ratio" && m.aggregation.type !== "derived_sum")
-    .filter((m) => m.source !== "combined" && enabled.has(m.source))
+    .filter((m) => m.source !== "combined" && enabled.has(m.source) && !m.internal)
     .map((m) => ({
       key: m.key,
       label: m.label,

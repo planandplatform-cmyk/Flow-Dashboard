@@ -558,6 +558,61 @@ const definitions: MetricDefinition[] = [
   },
 
   // -------------------------------------------------------------------------
+  // Google Search (Search Console): organic results, not ads
+  // -------------------------------------------------------------------------
+  {
+    key: "gsc_clicks",
+    source: "search_console",
+    label: "Search Clicks",
+    definition: "Times people clicked through to your website from a regular (unpaid) Google search result.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["query", "page"],
+  },
+  {
+    key: "gsc_impressions",
+    source: "search_console",
+    label: "Search Impressions",
+    definition: "Times your website appeared in Google search results, whether or not anyone clicked.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: true,
+    dimensions: ["query", "page"],
+  },
+  {
+    key: "gsc_position_weighted",
+    source: "search_console",
+    label: "Position x Impressions",
+    definition: "Used to work out average position over any date range.",
+    format: "number",
+    aggregation: sum,
+    upIsGood: false,
+    dimensions: ["query", "page"],
+    internal: true,
+  },
+  {
+    key: "gsc_ctr",
+    source: "search_console",
+    label: "Search Click Rate",
+    definition: "The share of people who clicked your website after seeing it in Google search results.",
+    format: "percent",
+    aggregation: ratio("gsc_clicks", "gsc_impressions"),
+    upIsGood: true,
+    dimensions: ["query", "page"],
+  },
+  {
+    key: "gsc_position",
+    source: "search_console",
+    label: "Avg. Google Position",
+    definition: "Where your website ranks in Google results on average. 1 is the top result; 1 to 10 is the first page. Lower is better.",
+    format: "number",
+    aggregation: ratio("gsc_position_weighted", "gsc_impressions"),
+    upIsGood: false,
+    dimensions: ["query", "page"],
+  },
+
+  // -------------------------------------------------------------------------
   // Meta Ads (rolled up from ad_metrics_daily; reach from metrics_period)
   // -------------------------------------------------------------------------
   {

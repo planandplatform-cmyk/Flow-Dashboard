@@ -6,15 +6,42 @@ import { AdminClientTop } from "@/components/admin-client-top";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
 import { serviceAccountEmail } from "@/lib/connectors/google-auth";
-import { getAdminViewer, getClientSettings, getGa4Status, listClientMembers } from "@/lib/data/admin";
+import { getAdminViewer, getClientSettings, getConnectionStatus, listClientMembers } from "@/lib/data/admin";
 import type { Client } from "@/lib/data/portal";
 import { adminApiConfigured } from "@/lib/supabase/admin";
 import { inviteClientUser, removeClientUser, sendSignInLink, setClientArchived, updateClientAccount } from "../../../actions";
 import { ArchiveClient } from "../../../archive-client";
 import { ClientForm } from "../../../client-form";
 import { Members } from "../../../members";
-import { Ga4Connection } from "./ga4-connection";
-import { connectGa4, disconnectGa4, pullGa4History, syncGa4Now } from "./sync-actions";
+import { ConnectionCard, type ChannelCopy } from "./connection-card";
+import { connectSource, disconnectSource, pullHistory, syncNow } from "./sync-actions";
+
+const CHANNELS: { source: "ga4" | "search_console"; copy: ChannelCopy }[] = [
+  {
+    source: "ga4",
+    copy: {
+      title: "Google Analytics (GA4)",
+      blurb: "Pulls website numbers every night, read-only.",
+      idLabel: "GA4 Property ID",
+      placeholder: "412345678",
+      hint: "GA4 Admin, Property details. Numbers only, not the G- ID. Connecting pulls the last 13 months.",
+      accessHelp: "In the client's GA4: Admin, Property access management, add this email as a Viewer.",
+      inputMode: "numeric",
+    },
+  },
+  {
+    source: "search_console",
+    copy: {
+      title: "Google Search Console",
+      blurb: "Pulls Google search rankings every night, read-only.",
+      idLabel: "Search Console site",
+      placeholder: "example.com",
+      hint: "As shown in Search Console's property list: example.com for a domain property, or https://www.example.com/. Connecting pulls the last 13 months.",
+      accessHelp: "In the client's Search Console: Settings, Users and permissions, Add user, this email, Restricted.",
+      inputMode: "url",
+    },
+  },
+];
 
 export const metadata: Metadata = { title: "Client settings" };
 
@@ -35,8 +62,12 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
   if (!viewer) notFound();
   const client = await getClientSettings(slug);
   if (!client) notFound();
-  const [members, ga4] = await Promise.all([listClientMembers(client.id), getGa4Status(client.id)]);
+  const [members, statuses] = await Promise.all([
+    listClientMembers(client.id),
+    Promise.all(CHANNELS.map((c) => getConnectionStatus(client.id, c.source))),
+  ]);
   const serviceEmail = serviceAccountEmail();
+  const synced = CHANNELS.map((c, i) => ({ ...c, status: statuses[i] })).filter((c) => client.enabled_sources.includes(c.source));
 
   return (
     <>
@@ -75,22 +106,28 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
           <ClientForm action={updateClientAccount.bind(null, client.slug)} initial={client} mode="edit" demo={viewer.demo} />
         </section>
 
-        {client.enabled_sources.includes("ga4") && (
+        {synced.length > 0 && (
           <section>
             <h2 className="mb-4 text-lg font-semibold">Automatic data</h2>
             <p className="mb-4 text-sm text-fg-secondary">
               Connected channels update every night on their own. Uploads still work for everything else.
             </p>
-            <Ga4Connection
-              status={ga4}
-              serviceEmail={serviceEmail}
-              ready={Boolean(serviceEmail) && adminApiConfigured()}
-              demo={viewer.demo}
-              connect={connectGa4.bind(null, client.slug)}
-              syncNow={syncGa4Now.bind(null, client.slug)}
-              pullHistory={pullGa4History.bind(null, client.slug)}
-              disconnect={disconnectGa4.bind(null, client.slug)}
-            />
+            <div className="space-y-4">
+              {synced.map(({ source, copy, status }) => (
+                <ConnectionCard
+                  key={source}
+                  copy={copy}
+                  status={status}
+                  serviceEmail={serviceEmail}
+                  ready={Boolean(serviceEmail) && adminApiConfigured()}
+                  demo={viewer.demo}
+                  connect={connectSource.bind(null, client.slug, source)}
+                  syncNow={syncNow.bind(null, client.slug, source)}
+                  pullHistory={pullHistory.bind(null, client.slug, source)}
+                  disconnect={disconnectSource.bind(null, client.slug, source)}
+                />
+              ))}
+            </div>
           </section>
         )}
 

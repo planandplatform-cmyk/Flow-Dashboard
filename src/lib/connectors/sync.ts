@@ -5,7 +5,21 @@ import type { DateRange } from "@/lib/metrics/aggregate";
 import { GoogleAuthError } from "./google-auth";
 import { Ga4Error, runGa4Report } from "./ga4";
 import { ga4Requests, mapGa4Report } from "./ga4-map";
+import { GscError, runGscReport } from "./gsc";
+import { gscRequests, mapGscReport } from "./gsc-map";
 import { replaceWindow } from "./sync-plan";
+
+/** Channels the portal pulls automatically. */
+export const SYNC_SOURCES = ["ga4", "search_console"] as const;
+export type SyncSource = (typeof SYNC_SOURCES)[number];
+
+type Rows = { daily: DailyIn[]; period: PeriodIn[] };
+
+/** Every report for a range, fetched a few at a time, as portal rows. */
+async function pull(source: SyncSource, accountId: string, range: DateRange): Promise<Rows[]> {
+  if (source === "ga4") return inBatches(ga4Requests(range), CONCURRENCY, async (req) => mapGa4Report(req, await runGa4Report(accountId, req)));
+  return inBatches(gscRequests(range), CONCURRENCY, async (req) => mapGscReport(req, await runGscReport(accountId, req)));
+}
 
 export interface SyncResult {
   ok: boolean;
@@ -17,7 +31,9 @@ export interface SyncResult {
 interface SyncTarget {
   clientId: string;
   connectionId: string;
-  propertyId: string;
+  source: SyncSource;
+  /** GA4 property ID or Search Console site. */
+  accountId: string;
 }
 
 const CONCURRENCY = 4;
@@ -35,13 +51,13 @@ function dedupe<T>(rows: T[], key: (r: T) => string): T[] {
 }
 
 /**
- * Pull GA4 for one client and date range, replacing what was there.
+ * Pull one channel for one client and date range, replacing what was there.
  *
  * Writes with the service client (callers check access first). The new rows
  * are written before the old ones are removed, so a failed pull never leaves
  * a gap: the previous numbers stay until a pull fully succeeds.
  */
-export async function syncGa4(
+export async function syncSource(
   db: SupabaseClient,
   target: SyncTarget,
   range: DateRange,
@@ -53,7 +69,7 @@ export async function syncGa4(
     .insert({
       client_id: target.clientId,
       connection_id: target.connectionId,
-      source: "ga4",
+      source: target.source,
       trigger,
       triggered_by: triggeredBy,
       period_start: range.start,
@@ -66,7 +82,7 @@ export async function syncGa4(
   const runId = run.id as string;
 
   try {
-    const reports = await inBatches(ga4Requests(range), CONCURRENCY, async (req) => mapGa4Report(req, await runGa4Report(target.propertyId, req)));
+    const reports = await pull(target.source, target.accountId, range);
     const stamp = { client_id: target.clientId, sync_run_id: runId, upload_id: null, updated_at: new Date().toISOString() };
     const daily = dedupe(
       reports.flatMap((r) => r.daily),
@@ -90,14 +106,14 @@ export async function syncGa4(
       if (error) throw new Error(`Saving monthly numbers failed: ${error.message}`);
     }
 
-    // Everything else GA4 had for these dates is replaced by this pull.
+    // Everything else this channel had for these dates is replaced by this pull.
     const win = replaceWindow(range);
     const notThisRun = `sync_run_id.is.null,sync_run_id.neq.${runId}`;
     const staleDaily = await db
       .from("metrics_daily")
       .delete()
       .eq("client_id", target.clientId)
-      .eq("source", "ga4")
+      .eq("source", target.source)
       .gte("date", win.daily.start)
       .lte("date", win.daily.end)
       .or(notThisRun);
@@ -106,7 +122,7 @@ export async function syncGa4(
       .from("metrics_period")
       .delete()
       .eq("client_id", target.clientId)
-      .eq("source", "ga4")
+      .eq("source", target.source)
       .gte("period_start", win.period.start)
       .lte("period_end", win.period.end)
       .or(notThisRun);
@@ -119,7 +135,7 @@ export async function syncGa4(
     return { ok: true, rows, error: null, runId };
   } catch (e) {
     const message =
-      e instanceof Ga4Error || e instanceof GoogleAuthError ? e.message : `The sync stopped: ${e instanceof Error ? e.message : String(e)}`;
+      e instanceof Ga4Error || e instanceof GscError || e instanceof GoogleAuthError ? e.message : `The sync stopped: ${e instanceof Error ? e.message : String(e)}`;
     const now = new Date().toISOString();
     await db.from("sync_runs").update({ status: "failed", error: message, finished_at: now }).eq("id", runId);
     await db.from("connections").update({ status: "error", last_error: message, last_error_at: now, updated_at: now }).eq("id", target.connectionId);

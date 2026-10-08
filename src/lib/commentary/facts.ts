@@ -74,7 +74,7 @@ function metric(resolver: MetricResolver, key: string, range: DateRange, previou
 
 const keysFor = (source: DataSource) =>
   Object.values(METRICS)
-    .filter((m) => m.source === source)
+    .filter((m) => m.source === source && !m.internal)
     .map((m) => m.key);
 
 export function buildMonthFacts(input: FactsInput): MonthFacts {
@@ -113,6 +113,16 @@ export function buildMonthFacts(input: FactsInput): MonthFacts {
       if (channels.length) details.push(`Sessions by channel: ${channels.map((c) => `${c.bucket} ${formatMetric("ga4_sessions", c.value)}`).join(", ")}`);
       const pages = resolver.breakdown("ga4_page_views", "landing_page", range).slice(0, 5);
       if (pages.length) details.push(`Top landing pages by views: ${pages.map((p) => `${p.bucket} ${formatMetric("ga4_page_views", p.value)}`).join(", ")}`);
+    }
+    if (source === "search_console") {
+      const queries = resolver.breakdown("gsc_clicks", "query", range).slice(0, 8);
+      if (queries.length) {
+        details.push(
+          `Top Google searches by clicks: ${queries
+            .map((q) => `"${q.bucket}" ${formatMetric("gsc_clicks", q.value)} clicks, position ${formatMetric("gsc_position", resolver.resolve("gsc_position", range, { dimension: "query", value: q.bucket }).value)}`)
+            .join("; ")}`,
+        );
+      }
     }
     sections.push({
       id: source,
