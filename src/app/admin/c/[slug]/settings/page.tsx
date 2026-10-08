@@ -6,7 +6,9 @@ import { AdminClientTop } from "@/components/admin-client-top";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
 import { serviceAccountEmail } from "@/lib/connectors/google-auth";
-import { getAdminViewer, getClientSettings, getConnectionStatus, listClientMembers } from "@/lib/data/admin";
+import { DEFAULT_WALKTHROUGH_URL } from "@/lib/clients/share-email";
+import { getAdminViewer, getClientSettings, getConnectionStatus, listClientMembers, siteUrl } from "@/lib/data/admin";
+import { addMonths, formatMonth, monthOf, todayIn } from "@/lib/dates";
 import type { Client } from "@/lib/data/portal";
 import { adminApiConfigured } from "@/lib/supabase/admin";
 import { inviteClientUser, removeClientUser, sendSignInLink, setClientArchived, updateClientAccount } from "../../../actions";
@@ -14,6 +16,7 @@ import { ArchiveClient } from "../../../archive-client";
 import { ClientForm } from "../../../client-form";
 import { Members } from "../../../members";
 import { ConnectionCard, type ChannelCopy } from "./connection-card";
+import { ShareEmail } from "./share-email";
 import { connectSource, disconnectSource, pullHistory, syncNow } from "./sync-actions";
 
 const CHANNELS: { source: "ga4" | "search_console"; copy: ChannelCopy }[] = [
@@ -67,6 +70,10 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
     Promise.all(CHANNELS.map((c) => getConnectionStatus(client.id, c.source))),
   ]);
   const serviceEmail = serviceAccountEmail();
+  // Report email: last 12 months, defaulting to last month (the one just reported).
+  const thisMonth = monthOf(todayIn(client.timezone));
+  const shareMonths = Array.from({ length: 12 }, (_, i) => addMonths(thisMonth, -i)).map((m) => ({ value: m.slice(0, 7), label: formatMonth(m) }));
+  const reportBase = `${await siteUrl()}/c/${client.slug}`;
   const synced = CHANNELS.map((c, i) => ({ ...c, status: statuses[i] })).filter((c) => client.enabled_sources.includes(c.source));
 
   return (
@@ -98,6 +105,20 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
             emptyText="Nobody can log in to this client yet."
             inviteLabel="Invite someone from this business"
             demo={viewer.demo}
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-lg font-semibold">Send the report link</h2>
+          <p className="mb-4 text-sm text-fg-secondary">A short email with their report link and the portal walkthrough video, ready to paste into Gmail.</p>
+          <ShareEmail
+            clientName={client.name}
+            reportBase={reportBase}
+            months={shareMonths}
+            defaultMonth={shareMonths[1].value}
+            recipients={members.map((m) => m.email)}
+            videoUrl={process.env.WALKTHROUGH_VIDEO_URL || DEFAULT_WALKTHROUGH_URL}
+            senderName=""
           />
         </section>
 
