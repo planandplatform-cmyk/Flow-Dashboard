@@ -9,6 +9,7 @@ import { serviceAccountEmail } from "@/lib/connectors/google-auth";
 import { DEFAULT_WALKTHROUGH_URL } from "@/lib/clients/share-email";
 import { getAdminViewer, getClientSettings, getConnectionStatus, listClientMembers, siteUrl } from "@/lib/data/admin";
 import { addMonths, formatMonth, monthOf, todayIn } from "@/lib/dates";
+import { SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
 import type { Client } from "@/lib/data/portal";
 import { adminApiConfigured } from "@/lib/supabase/admin";
 import { inviteClientUser, removeClientUser, sendSignInLink, setClientArchived, updateClientAccount } from "../../../actions";
@@ -73,7 +74,8 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
   // Report email: last 12 months, defaulting to last month (the one just reported).
   const thisMonth = monthOf(todayIn(client.timezone));
   const shareMonths = Array.from({ length: 12 }, (_, i) => addMonths(thisMonth, -i)).map((m) => ({ value: m.slice(0, 7), label: formatMonth(m) }));
-  const reportBase = `${await siteUrl()}/c/${client.slug}`;
+  const site = await siteUrl();
+  const reportBase = `${site}/c/${client.slug}`;
   const synced = CHANNELS.map((c, i) => ({ ...c, status: statuses[i] })).filter((c) => client.enabled_sources.includes(c.source));
 
   return (
@@ -109,11 +111,15 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
         </section>
 
         <section>
-          <h2 className="mb-4 text-lg font-semibold">Send the report link</h2>
-          <p className="mb-4 text-sm text-fg-secondary">A short email with their report link and the portal walkthrough video, ready to paste into Gmail.</p>
+          <h2 className="mb-4 text-lg font-semibold">Emails to the client</h2>
+          <p className="mb-4 text-sm text-fg-secondary">
+            A welcome to the portal and a monthly report email, with their links and the walkthrough video, ready to send from Gmail.
+          </p>
           <ShareEmail
             clientName={client.name}
             reportBase={reportBase}
+            loginUrl={`${site}/login`}
+            channels={client.enabled_sources.map((src) => SOURCE_LABELS[src as DataSource])}
             months={shareMonths}
             defaultMonth={shareMonths[1].value}
             recipients={members.map((m) => m.email)}
