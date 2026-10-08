@@ -197,17 +197,19 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
           )}
         </Section>
 
-        {/* 2. Key terms */}
-        <Section id="terms" number={next()} title="Understanding Key Social Media Terms">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {GLOSSARY.map((g) => (
-              <Card key={g.id} className="p-4">
-                <p className="font-semibold text-teal">{g.term}</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-fg-secondary">{g.definition}</p>
-              </Card>
-            ))}
-          </div>
-        </Section>
+        {/* 2. Key terms (social clients only) */}
+        {report.show.terms && (
+          <Section id="terms" number={next()} title="Understanding Key Social Media Terms">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {GLOSSARY.map((g) => (
+                <Card key={g.id} className="p-4">
+                  <p className="font-semibold text-teal">{g.term}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-fg-secondary">{g.definition}</p>
+                </Card>
+              ))}
+            </div>
+          </Section>
+        )}
 
         {/* 3. Social overview */}
         {socials.length > 0 && (

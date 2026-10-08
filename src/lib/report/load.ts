@@ -364,7 +364,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
 
   const nav = [
     { id: "summary", label: "Summary", show: true },
-    { id: "terms", label: "Key terms", show: true },
+    // Social media terms only when the client has a social channel turned on.
+    { id: "terms", label: "Key terms", show: enabledSocial.length > 0 },
     { id: "social", label: "Social", show: socials.length > 0 },
     { id: "platforms", label: "Platforms", show: socials.length > 0 },
     { id: "website", label: "Website", show: hasWebsite },
@@ -445,7 +446,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     trends,
     trendGroups,
     chartAnnotations,
-    show: { content: showContent, audience: showAudience, discovery: showDiscovery, video: showVideo },
+    show: { terms: enabledSocial.length > 0, content: showContent, audience: showAudience, discovery: showDiscovery, video: showVideo },
     nav,
     compareTitle,
     heroTiles,

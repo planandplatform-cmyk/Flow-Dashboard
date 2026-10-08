@@ -137,18 +137,20 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
           )}
         </View>
 
-        {/* Key terms */}
-        <View style={s.section}>
-          <Heading s={s} n={next()} title="Understanding Key Social Media Terms" />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {GLOSSARY.map((g) => (
-              <View key={g.id} wrap={false} style={[s.card, { width: "49%", padding: 8 }]}>
-                <Text style={{ fontWeight: 600, color: t.accentText }}>{g.term}</Text>
-                <Text style={[s.body, { fontSize: 8, marginTop: 2 }]}>{g.definition}</Text>
-              </View>
-            ))}
+        {/* Key terms (social clients only) */}
+        {r.show.terms && (
+          <View style={s.section}>
+            <Heading s={s} n={next()} title="Understanding Key Social Media Terms" />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {GLOSSARY.map((g) => (
+                <View key={g.id} wrap={false} style={[s.card, { width: "49%", padding: 8 }]}>
+                  <Text style={{ fontWeight: 600, color: t.accentText }}>{g.term}</Text>
+                  <Text style={[s.body, { fontSize: 8, marginTop: 2 }]}>{g.definition}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Social overview */}
         {socials.length > 0 && (
