@@ -81,7 +81,30 @@ export const GOOGLE_ADS_TABLE: { key: string; meaning: string }[] = [
   { key: "gads_cpa", meaning: "Average cost of each conversion" },
   { key: "gads_conversion_value", meaning: "Value of the conversions, where tracked" },
   { key: "gads_roas", meaning: "Conversion value for every dollar spent" },
+  { key: "gads_impression_share", meaning: "Share of eligible searches where the ad showed" },
+  { key: "gads_top_of_page_rate", meaning: "How often the ad showed above the search results" },
+  { key: "gads_abs_top_rate", meaning: "How often the ad was the very first result" },
 ];
+
+/** Short auction insights column headings. */
+export const AUCTION_LABELS: Record<string, string> = {
+  gads_impression_share: "Impr. Share",
+  gads_overlap_rate: "Overlap",
+  gads_position_above_rate: "Position Above",
+  gads_top_of_page_rate: "Top of Page",
+  gads_abs_top_rate: "Abs. Top",
+  gads_outranking_share: "Outranking",
+};
+
+/** Auction insights columns, in Google's order. */
+export const AUCTION_KEYS = [
+  "gads_impression_share",
+  "gads_overlap_rate",
+  "gads_position_above_rate",
+  "gads_top_of_page_rate",
+  "gads_abs_top_rate",
+  "gads_outranking_share",
+] as const;
 
 /** Short column headings for website tables. */
 export const WEBSITE_COLUMNS: Record<string, string> = {
@@ -298,6 +321,28 @@ export async function loadReport(client: Client, search: Search, opts: { publish
             };
           })
       : [];
+  // Auction insights: the account's own row first, then competitors by impression share.
+  const auctionRow = (filter?: { dimension: string; value: string }) => AUCTION_KEYS.map((k) => resolver.resolve(k, range, filter).value);
+  const competitorNames = hasGoogleAds ? [...new Set(AUCTION_KEYS.flatMap((k) => resolver.breakdown(k, "competitor", range).map((b) => b.bucket)))] : [];
+  const googleAuction =
+    hasGoogleAds && (auctionRow().some((v) => v !== null) || competitorNames.length)
+      ? [
+          { name: "You", you: true, values: auctionRow() },
+          ...competitorNames
+            .map((name) => ({ name, you: false, values: auctionRow({ dimension: "competitor", value: name }) }))
+            .sort((a, b) => (b.values[0] ?? 0) - (a.values[0] ?? 0)),
+        ]
+      : [];
+  // Who saw the ads (Google Ads demographics), shown in the Google Ads section.
+  const googleDemographics = hasGoogleAds
+    ? (["age", "gender"] as const)
+        .map((type) => ({
+          type,
+          title: type === "age" ? "Ad impressions by age" : "Ad impressions by gender",
+          items: snapshotsOf(snapshots, "google_ads", type).sort((a, b) => (type === "age" ? a.bucket.localeCompare(b.bucket) : b.share - a.share)),
+        }))
+        .filter((d) => d.items.length > 0)
+    : [];
   const googleSearchTerms = googleTop("search_term");
   const googleKeywords = googleTop("keyword");
   const momKeys = compareRange ? MOM_KEYS.filter((k) => val(k) !== null && val(k, compareRange) !== null) : [];
@@ -313,7 +358,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const chartAnnotations = allAnnotations.map((a) => ({ month: monthOf(a.date), date: a.date, label: `${formatDay(a.date)}: ${a.label}` }));
 
   const showContent = posts.length > 0 || social.contentTypes.length > 0 || snapshots.some((s) => s.breakdown_type === "format_engagement");
-  const showAudience = snapshots.some((s) => DEMOGRAPHICS.some((d) => d.type === s.breakdown_type));
+  const showAudience = snapshots.some((s) => (SOCIAL_SOURCES as readonly string[]).includes(s.platform) && DEMOGRAPHICS.some((d) => d.type === s.breakdown_type));
   const showDiscovery = social.discovery.some((d) => d.activity[0] !== NOT_AVAILABLE || d.split[0] !== NOT_AVAILABLE);
   const showVideo = VIDEO_KEYS.some((k) => val(k) !== null);
 
@@ -392,6 +437,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     hasGoogleAds,
     googleCampaigns,
     googleSearchTerms,
+    googleAuction,
+    googleDemographics,
     googleKeywords,
     momKeys,
     months,

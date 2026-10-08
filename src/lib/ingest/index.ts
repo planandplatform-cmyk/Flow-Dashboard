@@ -7,6 +7,7 @@ import { SOURCE_LABELS } from "@/lib/metrics/types";
 import { BatchBuilder } from "./batch";
 import { ga4Parser } from "./parsers/ga4";
 import { googleAdsParser } from "./parsers/google-ads";
+import { googleAdsInsightsParser } from "./parsers/google-ads-insights";
 import { linkedinParser } from "./parsers/linkedin";
 import { metaAdsParser } from "./parsers/meta-ads";
 import { metaContentParser, metaInsightsParser } from "./parsers/meta-organic";
@@ -21,6 +22,7 @@ export const PARSERS: Parser[] = [
   metaInsightsParser,
   metaAdsParser,
   googleAdsParser,
+  googleAdsInsightsParser,
   shopifyParser,
   tiktokParser,
   linkedinParser,

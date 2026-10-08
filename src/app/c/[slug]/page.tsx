@@ -18,7 +18,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS } from "@/lib/report/load";
+import { ADS_TABLE, AUCTION_KEYS, AUCTION_LABELS, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS } from "@/lib/report/load";
 import { describeRange, periodQuery } from "@/lib/report/period";
 
 export const metadata: Metadata = { title: "Performance Report" };
@@ -75,6 +75,8 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     hasGoogleAds,
     googleCampaigns,
     googleSearchTerms,
+    googleAuction,
+    googleDemographics,
     googleKeywords,
     momKeys,
     months,
@@ -625,6 +627,35 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                   />
                 </div>
               ))}
+            {googleAuction.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Auction insights</h3>
+                <DataTable
+                  caption="Google Ads auction insights"
+                  columns={[
+                    { label: "Advertiser" },
+                    ...AUCTION_KEYS.map((k) => ({ label: <MetricLabel metricKey={k} label={AUCTION_LABELS[k]} />, align: "right" as const })),
+                  ]}
+                  rows={googleAuction.map((r) => [
+                    <span key={r.name} className={r.you ? "font-semibold text-teal" : "text-fg"}>
+                      {r.you ? "You" : r.name}
+                    </span>,
+                    ...r.values.map((v, i) => (v === null ? (i === 0 && !r.you ? "Under 10%" : "--") : formatMetric(AUCTION_KEYS[i], v))),
+                  ])}
+                />
+                <p className="mt-2 text-xs text-fg-muted">How your ads showed and ranked against other advertisers in the same searches.</p>
+              </div>
+            )}
+            {googleDemographics.length > 0 && (
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {googleDemographics.map((d) => (
+                  <Card key={d.type} className="p-5">
+                    <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">{d.title}</h3>
+                    <ShareBars items={d.items} />
+                  </Card>
+                ))}
+              </div>
+            )}
           </Section>
         )}
 

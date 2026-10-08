@@ -58,3 +58,15 @@ export function missingPeriodMessage(what: string) {
 export function yearHint(ctx: ParseContext): string {
   return ctx.period?.end ?? ctx.today;
 }
+
+/**
+ * The date range in an export's file name, e.g. Google Ads
+ * "DemographicsAge_2026.09.01-2026.09.30.csv". Null if there is none.
+ */
+export function fileNamePeriod(fileName: string): { start: string; end: string } | null {
+  const m = /(\d{4})[.-](\d{2})[.-](\d{2})\s*[-_]\s*(\d{4})[.-](\d{2})[.-](\d{2})/.exec(fileName);
+  if (!m) return null;
+  const start = `${m[1]}-${m[2]}-${m[3]}`;
+  const end = `${m[4]}-${m[5]}-${m[6]}`;
+  return end >= start ? { start, end } : null;
+}

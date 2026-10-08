@@ -8,7 +8,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatDelta, formatMetric, formatPctChange, formatValue } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS, type Report } from "@/lib/report/load";
+import { ADS_TABLE, AUCTION_KEYS, AUCTION_LABELS, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS, type Report } from "@/lib/report/load";
 import { PLATFORM_COLORS, type Bar, type CompetitorTable } from "@/lib/report/social";
 import { describeRange } from "@/lib/report/period";
 import type { TrendSeries } from "@/lib/report/trends";
@@ -526,6 +526,28 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                     formatMetric("gads_cpa", c.cpa),
                   ])}
                 />
+              </View>
+            )}
+            {r.googleAuction.length > 0 && (
+              <View style={{ marginTop: 8 }} wrap={false}>
+                <Text style={[s.label, { marginBottom: 4 }]}>Auction insights</Text>
+                <Table
+                  s={s}
+                  t={t}
+                  widths={[28, 12, 12, 12, 12, 12, 12]}
+                  head={["Advertiser", ...AUCTION_KEYS.map((k) => AUCTION_LABELS[k])]}
+                  rows={r.googleAuction.map((a) => [
+                    a.you ? "You" : a.name,
+                    ...a.values.map((v, i) => (v === null ? (i === 0 && !a.you ? "Under 10%" : "--") : formatMetric(AUCTION_KEYS[i], v))),
+                  ])}
+                />
+              </View>
+            )}
+            {r.googleDemographics.length > 0 && (
+              <View style={[s.row, { marginTop: 8 }]} wrap={false}>
+                {r.googleDemographics.map((d) => (
+                  <ShareCard key={d.type} s={s} t={t} title={d.title} items={d.items} />
+                ))}
               </View>
             )}
           </View>

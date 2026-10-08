@@ -264,3 +264,34 @@ describe("guard rails", () => {
     expect(r.warnings[0]).toMatch(/You chose Website/);
   });
 });
+
+describe("Google Ads auction insights, demographics and searches", () => {
+  it("reads auction insights for the account and competitors", () => {
+    const r = parse("google-ads-auction-insights-competitors.csv");
+    expect(r.errors).toEqual([]);
+    const row = (key: string, dim = "") => r.batch.period.find((p) => p.metric_key === key && p.dimension_value === dim)?.value;
+    expect(row("gads_impression_share")).toBe(0.6214);
+    expect(row("gads_abs_top_rate")).toBe(0.7027);
+    expect(row("gads_overlap_rate")).toBeUndefined();
+    expect(row("gads_impression_share", "rivalhousing.com")).toBeUndefined();
+    expect(row("gads_outranking_share", "rivalhousing.com")).toBe(0.55);
+    expect(r.batch.period[0]).toMatchObject({ period_start: "2026-09-01", period_end: "2026-09-30" });
+    expect(r.warnings.join(" ")).toContain("< 10%");
+  });
+
+  it("splits a gender and age file into both breakdowns, dated from the file name", () => {
+    const r = parse("DemographicsGender_Age_2026.09.01-2026.09.30.csv");
+    expect(r.errors).toEqual([]);
+    const share = (type: string, bucket: string) => r.batch.snapshots.find((s) => s.breakdown_type === type && s.bucket === bucket)?.share;
+    expect(share("age", "25-34")).toBeCloseTo(183 / 497, 3);
+    expect(share("gender", "Male")).toBeCloseTo(372 / 497, 3);
+    expect(r.batch.snapshots[0]).toMatchObject({ platform: "google_ads", snapshot_date: "2026-09-30", period_start: "2026-09-01" });
+  });
+
+  it("reads the overview Searches table as search terms", () => {
+    const r = parse("SearchesSearch_2026.09.01-2026.09.30.csv");
+    expect(r.errors).toEqual([]);
+    const spend = r.batch.period.find((p) => p.metric_key === "gads_spend" && p.dimension_value === "faa academy housing");
+    expect(spend).toMatchObject({ value: 48.89, dimension: "search_term", period_start: "2026-09-01" });
+  });
+});

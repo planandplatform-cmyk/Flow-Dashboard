@@ -12,7 +12,8 @@
  *   "Other search terms": adding up the listed rows would undercount. With
  *   no total row (a daily campaign export), the campaign rows are added up.
  * - With a "Day" column, values are daily; otherwise they cover the date
- *   range in the file header.
+ *   range in the file header (or the file name, for overview page exports
+ *   like "SearchesSearch_2026.09.01-2026.09.30.csv").
  *
  * CTR, Avg. CPC, Cost / conv., Conv. rate and ROAS columns are ignored on
  * purpose: the portal recomputes them from cost, clicks, impressions,
@@ -20,10 +21,10 @@
  */
 import { norm, num, parseDate } from "../cells";
 import type { ParseContext, Parser } from "../types";
-import { cell, headerSet, hasAll, hasAny, mapHeaders, missingPeriodMessage } from "./common";
+import { cell, fileNamePeriod, headerSet, hasAll, hasAny, mapHeaders, missingPeriodMessage } from "./common";
 
 const ROLES = {
-  searchTerm: ["Search term"],
+  searchTerm: ["Search term", "Search"],
   keyword: ["Keyword", "Search keyword"],
   adGroup: ["Ad group", "Ad group name"],
   campaign: ["Campaign", "Campaign name"],
@@ -48,7 +49,7 @@ const MONEY = ["gads_spend", "gads_conversion_value"];
 const TOTAL_RANK = [/^total:\s*account/i, /^total:\s*campaigns?$/i];
 
 /** "July 1, 2026 - July 31, 2026" (or with a dash variant) in the lines above the table. */
-function headerPeriod(rows: string[][], before: number): { start: string; end: string } | null {
+export function headerPeriod(rows: string[][], before: number): { start: string; end: string } | null {
   for (const r of rows.slice(0, before)) {
     for (const c of r) {
       const parts = (c ?? "").split(/\s+[-–—]\s+|\s+to\s+/i);
@@ -71,6 +72,8 @@ export const googleAdsParser: Parser = {
       const h = headerSet(s.rows, 6);
       if (hasAll(h, "Impr.", "Cost") && hasAny(h, "Campaign", "Search term", "Keyword", "Ad group", "Clicks")) return 0.97;
       if (hasAll(h, "Cost", "Conversions") && hasAny(h, "Avg. CPC", "Cost / conv.") && hasAny(h, "Campaign", "Search term", "Keyword", "Ad group")) return 0.9;
+      // The overview page's "Searches" table: Search, Cost, Clicks, Impressions, Conversions.
+      if (hasAll(h, "Search", "Cost", "Clicks", "Impressions")) return 0.9;
     }
     return 0;
   },
@@ -83,7 +86,7 @@ export const googleAdsParser: Parser = {
       const { idx, mapped, unmapped } = mapHeaders(sheet.rows[h], ROLES, IGNORE);
       out.columns(mapped, unmapped);
       if (idx.cost < 0 && idx.clicks < 0) continue;
-      const period = headerPeriod(sheet.rows, h) ?? ctx.period ?? null;
+      const period = headerPeriod(sheet.rows, h) ?? fileNamePeriod(ctx.fileName) ?? ctx.period ?? null;
 
       // The most specific row label decides what each row is.
       const dimension = idx.searchTerm >= 0 ? "search_term" : idx.keyword >= 0 ? "keyword" : idx.adGroup >= 0 ? "ad_group" : "campaign";

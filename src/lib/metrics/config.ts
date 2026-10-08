@@ -557,6 +557,74 @@ const definitions: MetricDefinition[] = [
     upIsGood: true,
   },
 
+  // Auction insights: how your ads showed and ranked against other advertisers.
+  {
+    key: "gads_impression_share",
+    source: "google_ads",
+    label: "Search Impression Share",
+    definition: "The share of searches where your ad showed, out of all the searches it was eligible to show for. Higher means fewer missed chances.",
+    format: "percent",
+    // A reading for the auction insights date range; "competitor" rows are other advertisers.
+    aggregation: last,
+    upIsGood: true,
+    dimensions: ["competitor"],
+  },
+  {
+    key: "gads_top_of_page_rate",
+    source: "google_ads",
+    label: "Top of Page Rate",
+    definition: "How often your ad showed above the regular search results.",
+    format: "percent",
+    // A reading for the auction insights date range; "competitor" rows are other advertisers.
+    aggregation: last,
+    upIsGood: true,
+    dimensions: ["competitor"],
+  },
+  {
+    key: "gads_abs_top_rate",
+    source: "google_ads",
+    label: "Absolute Top Rate",
+    definition: "How often your ad was the very first ad above the search results.",
+    format: "percent",
+    // A reading for the auction insights date range; "competitor" rows are other advertisers.
+    aggregation: last,
+    upIsGood: true,
+    dimensions: ["competitor"],
+  },
+  {
+    key: "gads_overlap_rate",
+    source: "google_ads",
+    label: "Overlap Rate",
+    definition: "How often a competitor's ad showed at the same time as yours.",
+    format: "percent",
+    // A reading for the auction insights date range; "competitor" rows are other advertisers.
+    aggregation: last,
+    upIsGood: true,
+    dimensions: ["competitor"],
+  },
+  {
+    key: "gads_position_above_rate",
+    source: "google_ads",
+    label: "Position Above Rate",
+    definition: "When both ads showed, how often the competitor's ad was placed above yours.",
+    format: "percent",
+    // A reading for the auction insights date range; "competitor" rows are other advertisers.
+    aggregation: last,
+    upIsGood: true,
+    dimensions: ["competitor"],
+  },
+  {
+    key: "gads_outranking_share",
+    source: "google_ads",
+    label: "Outranking Share",
+    definition: "How often your ad ranked above the competitor's, or showed when theirs did not.",
+    format: "percent",
+    // A reading for the auction insights date range; "competitor" rows are other advertisers.
+    aggregation: last,
+    upIsGood: true,
+    dimensions: ["competitor"],
+  },
+
   // -------------------------------------------------------------------------
   // Google Search (Search Console): organic results, not ads
   // -------------------------------------------------------------------------
