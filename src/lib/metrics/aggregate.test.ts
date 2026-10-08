@@ -232,6 +232,8 @@ describe("platform totals for slightly different dates", () => {
     const { formatValue } = await import("./format");
     expect(formatValue(298, "duration")).toBe("4h 58m");
     expect(formatValue(45, "duration")).toBe("45m");
+    expect(formatValue(83 / 60, "duration")).toBe("1m 23s");
+    expect(formatValue(0.8, "duration")).toBe("48s");
   });
 });
 

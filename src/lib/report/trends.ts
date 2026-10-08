@@ -29,6 +29,8 @@ export const TREND_KEYS = [
   "ga4_sessions",
   "ga4_engagement_rate",
   "ga4_key_events",
+  "ga4_avg_engagement_time",
+  "ga4_revenue",
   "fb_views",
   "fb_interactions",
   "fb_followers",

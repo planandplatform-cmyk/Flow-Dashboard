@@ -18,7 +18,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel } from "@/lib/report/load";
+import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS } from "@/lib/report/load";
 import { describeRange, periodQuery } from "@/lib/report/period";
 
 export const metadata: Metadata = { title: "Performance Report" };
@@ -64,6 +64,10 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     socials,
     social,
     hasWebsite,
+    websiteTiles,
+    salesTiles,
+    websiteChannels,
+    websitePages,
     hasAds,
     hasGoogleAds,
     googleCampaigns,
@@ -277,52 +281,49 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
         {/* Website */}
         {hasWebsite && (
           <Section id="website" number={next()} title="Website Performance" intro={narratives.ga4?.body}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {["ga4_sessions", "ga4_engagement_rate", "ga4_key_events"].map((k) => (
+            <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${websiteTiles.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+              {websiteTiles.map((k) => (
                 <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} />
               ))}
             </div>
+            {salesTiles.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Online sales</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {salesTiles.map((k) => (
+                    <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} />
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div>
-                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Sessions by channel</h3>
-                <DataTable
-                  caption="Website sessions by channel"
-                  columns={[
-                    { label: "Channel" },
-                    { label: <MetricLabel metricKey="ga4_sessions" />, align: "right" },
-                    { label: <MetricLabel metricKey="ga4_engagement_rate" label="Engagement" />, align: "right" },
-                    { label: <MetricLabel metricKey="ga4_key_events" />, align: "right" },
-                  ]}
-                  rows={resolver.breakdown("ga4_sessions", "channel", range).map(({ bucket, value }) => {
-                    const f = { dimension: "channel", value: bucket };
-                    return [
-                      bucket,
-                      formatMetric("ga4_sessions", value),
-                      formatMetric("ga4_engagement_rate", resolver.resolve("ga4_engagement_rate", range, f).value),
-                      formatMetric("ga4_key_events", resolver.resolve("ga4_key_events", range, f).value),
-                    ];
-                  })}
-                />
-              </div>
-              <div>
-                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Top landing pages</h3>
-                <DataTable
-                  caption="Top landing pages"
-                  columns={[
-                    { label: "Page" },
-                    { label: <MetricLabel metricKey="ga4_page_views" label="Views" />, align: "right" },
-                    { label: <MetricLabel metricKey="ga4_key_events" />, align: "right" },
-                  ]}
-                  rows={resolver
-                    .breakdown("ga4_page_views", "landing_page", range)
-                    .slice(0, 8)
-                    .map(({ bucket, value }) => [
-                      <span key={bucket} className="font-mono text-xs sm:text-sm">{bucket}</span>,
-                      formatMetric("ga4_page_views", value),
-                      formatMetric("ga4_key_events", resolver.resolve("ga4_key_events", range, { dimension: "landing_page", value: bucket }).value),
+              {(
+                [
+                  ["Sessions by channel", "Channel", websiteChannels],
+                  ["Top landing pages", "Page", websitePages],
+                ] as const
+              ).map(([title, first, table]) => (
+                <div key={title}>
+                  <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">{title}</h3>
+                  <DataTable
+                    caption={title}
+                    columns={[
+                      { label: first },
+                      ...table.keys.map((k) => ({ label: <MetricLabel metricKey={k} label={WEBSITE_COLUMNS[k]} />, align: "right" as const })),
+                    ]}
+                    rows={table.rows.map((row) => [
+                      first === "Page" ? (
+                        <span key={row.name} className="font-mono text-xs sm:text-sm">
+                          {row.name}
+                        </span>
+                      ) : (
+                        row.name
+                      ),
+                      ...row.values.map((v, i) => formatMetric(table.keys[i], v)),
                     ])}
-                />
-              </div>
+                  />
+                </div>
+              ))}
             </div>
           </Section>
         )}

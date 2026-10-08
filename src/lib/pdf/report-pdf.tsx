@@ -8,7 +8,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatDelta, formatMetric, formatPctChange, formatValue } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, type Report } from "@/lib/report/load";
+import { ADS_TABLE, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS, type Report } from "@/lib/report/load";
 import { PLATFORM_COLORS, type Bar, type CompetitorTable } from "@/lib/report/social";
 import { describeRange } from "@/lib/report/period";
 import type { TrendSeries } from "@/lib/report/trends";
@@ -216,51 +216,44 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
               <Heading s={s} n={next()} title="Website Performance" />
               {narratives.ga4?.body && <Text style={[s.body, { marginBottom: 8 }]}>{narratives.ga4.body}</Text>}
               <View style={s.row}>
-                {["ga4_sessions", "ga4_engagement_rate", "ga4_key_events"].map((k) => (
+                {r.websiteTiles.map((k) => (
                   <Kpi key={k} s={s} t={t} metricKey={k} value={val(k)} comparison={mom(k)} />
                 ))}
               </View>
+              {r.salesTiles.length > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  <Text style={[s.label, { marginBottom: 4 }]}>Online sales</Text>
+                  <View style={s.row}>
+                    {r.salesTiles.map((k) => (
+                      <Kpi key={k} s={s} t={t} metricKey={k} value={val(k)} comparison={mom(k)} />
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
-            <View style={[s.row, { marginTop: 10 }]}>
-              <View style={{ flex: 1 }} wrap={false}>
-                <Text style={[s.label, { marginBottom: 4 }]}>Sessions by channel</Text>
-                <Table
-                  s={s}
-                  t={t}
-                  widths={[40, 20, 20, 20]}
-                  head={["Channel", "Sessions", "Engagement", "Key Events"]}
-                  rows={r.resolver
-                    .breakdown("ga4_sessions", "channel", range)
-                    .slice(0, 8)
-                    .map(({ bucket, value }) => {
-                      const f = { dimension: "channel", value: bucket };
-                      return [
-                        bucket,
-                        formatMetric("ga4_sessions", value),
-                        formatMetric("ga4_engagement_rate", r.resolver.resolve("ga4_engagement_rate", range, f).value),
-                        formatMetric("ga4_key_events", r.resolver.resolve("ga4_key_events", range, f).value),
-                      ];
-                    })}
-                />
-              </View>
-              <View style={{ flex: 1 }} wrap={false}>
-                <Text style={[s.label, { marginBottom: 4 }]}>Top landing pages</Text>
-                <Table
-                  s={s}
-                  t={t}
-                  widths={[60, 20, 20]}
-                  head={["Page", "Views", "Key Events"]}
-                  rows={r.resolver
-                    .breakdown("ga4_page_views", "landing_page", range)
-                    .slice(0, 8)
-                    .map(({ bucket, value }) => [
-                      bucket,
-                      formatMetric("ga4_page_views", value),
-                      formatMetric("ga4_key_events", r.resolver.resolve("ga4_key_events", range, { dimension: "landing_page", value: bucket }).value),
-                    ])}
-                />
-              </View>
-            </View>
+            {(
+              [
+                ["Sessions by channel", "Channel", r.websiteChannels],
+                ["Top landing pages", "Page", r.websitePages],
+              ] as const
+            )
+              .filter(([, , table]) => table.rows.length > 0)
+              .map(([title, first, table]) => {
+                const rest = table.keys.length;
+                const firstWidth = first === "Page" ? 100 - rest * 13 : 100 - rest * 14;
+                return (
+                  <View key={title} style={{ marginTop: 10 }} wrap={false}>
+                    <Text style={[s.label, { marginBottom: 4 }]}>{title}</Text>
+                    <Table
+                      s={s}
+                      t={t}
+                      widths={[firstWidth, ...table.keys.map(() => (100 - firstWidth) / rest)]}
+                      head={[first, ...table.keys.map((k) => WEBSITE_COLUMNS[k])]}
+                      rows={table.rows.slice(0, 8).map((row) => [row.name, ...row.values.map((v, i) => formatMetric(table.keys[i], v))])}
+                    />
+                  </View>
+                );
+              })}
           </View>
         )}
 

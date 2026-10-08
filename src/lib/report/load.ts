@@ -47,6 +47,9 @@ export const MOM_KEYS = [
   "ga4_sessions",
   "ga4_key_events",
   "ga4_engagement_rate",
+  "ga4_avg_engagement_time",
+  "ga4_revenue",
+  "ga4_transactions",
   "gads_conversions",
   "gads_clicks",
   "gads_cpa",
@@ -76,6 +79,16 @@ export const GOOGLE_ADS_TABLE: { key: string; meaning: string }[] = [
   { key: "gads_conversion_value", meaning: "Value of the conversions, where tracked" },
   { key: "gads_roas", meaning: "Conversion value for every dollar spent" },
 ];
+
+/** Short column headings for website tables. */
+export const WEBSITE_COLUMNS: Record<string, string> = {
+  ga4_sessions: "Sessions",
+  ga4_page_views: "Views",
+  ga4_engagement_rate: "Engagement",
+  ga4_avg_engagement_time: "Avg. Time",
+  ga4_key_events: "Key Events",
+  ga4_revenue: "Sales",
+};
 
 export const FORMAT_LABELS: Record<string, string> = {
   reel: "Reel",
@@ -210,6 +223,26 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const narratives = commentary?.platform_narratives ?? {};
   const notes = commentary?.section_notes ?? {};
   const hasWebsite = enabled.has("ga4") && val("ga4_sessions") !== null;
+  // Time on site and online sales only show when GA4 has them (sales: online stores).
+  const hasTime = hasWebsite && val("ga4_avg_engagement_time") !== null;
+  const hasSales = hasWebsite && (val("ga4_revenue") ?? 0) > 0;
+  const websiteTiles = ["ga4_sessions", "ga4_engagement_rate", ...(hasTime ? ["ga4_avg_engagement_time"] : []), "ga4_key_events"];
+  const salesTiles = hasSales ? ["ga4_revenue", "ga4_transactions", "ga4_aov", "ga4_purchase_rate"] : [];
+  const websiteTable = (by: string, dimension: string, extra: string[], limit: number) => {
+    const keys = [by, ...extra.filter((k) => (k !== "ga4_avg_engagement_time" || hasTime) && (k !== "ga4_revenue" || hasSales))];
+    const rows = hasWebsite
+      ? resolver
+          .breakdown(by, dimension, range)
+          .slice(0, limit)
+          .map(({ bucket, value }) => ({
+            name: bucket,
+            values: [value, ...keys.slice(1).map((k) => resolver.resolve(k, range, { dimension, value: bucket }).value)],
+          }))
+      : [];
+    return { keys, rows };
+  };
+  const websiteChannels = websiteTable("ga4_sessions", "channel", ["ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 10);
+  const websitePages = websiteTable("ga4_page_views", "landing_page", ["ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 8);
   const hasAds = adsRange !== null && val("ads_spend", adsRange) !== null;
   const hasGoogleAds = enabled.has("google_ads") && (val("gads_spend") !== null || val("gads_clicks") !== null);
   const googleCampaigns = hasGoogleAds
@@ -323,6 +356,10 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     socials,
     social,
     hasWebsite,
+    websiteTiles,
+    salesTiles,
+    websiteChannels,
+    websitePages,
     hasAds,
     hasGoogleAds,
     googleCampaigns,

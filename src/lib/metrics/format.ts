@@ -25,6 +25,12 @@ export function formatValue(value: number | null | undefined, format: MetricForm
     case "multiplier":
       return `${value.toFixed(2)}x`;
     case "duration": {
+      // Short times (time on site) keep their seconds: 1m 23s, 48s.
+      if (Math.abs(value) < 10) {
+        const secs = Math.round(Math.abs(value) * 60);
+        const body = secs >= 60 ? `${Math.floor(secs / 60)}m${secs % 60 ? ` ${secs % 60}s` : ""}` : `${secs}s`;
+        return `${value < 0 ? "-" : ""}${body}`;
+      }
       const minutes = Math.round(value);
       const h = Math.floor(Math.abs(minutes) / 60);
       const m = Math.abs(minutes) % 60;
