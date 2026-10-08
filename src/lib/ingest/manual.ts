@@ -4,7 +4,7 @@
  * batch shape as a file upload so it goes through the same commit and
  * rollback path.
  */
-import { METRICS } from "@/lib/metrics/config";
+import { canBeNegative, METRICS } from "@/lib/metrics/config";
 import { DATA_SOURCES, type DataSource } from "@/lib/metrics/types";
 import { BatchBuilder } from "./batch";
 import type { BreakdownType, IngestBatch } from "./types";
@@ -44,7 +44,7 @@ export function buildManualBatch(form: FormData): { batch: IngestBatch; source: 
     const raw = String(form.get("value") ?? "").replace(/[$,%\s]/g, "");
     let value = Number(raw);
     if (raw === "" || !Number.isFinite(value)) return { error: "Enter a number for the value." };
-    if (value < 0 && !key.endsWith("_net_new_followers") && !key.endsWith("_change")) return { error: "This metric cannot be negative." };
+    if (value < 0 && !canBeNegative(key)) return { error: "This metric cannot be negative." };
     // Percentages are typed as shown (6.3 for 6.3%) and stored as fractions.
     if (def.format === "percent") value /= 100;
     const dimension = String(form.get("dimension") ?? "").trim();

@@ -1,4 +1,4 @@
-import { METRICS } from "@/lib/metrics/config";
+import { canBeNegative, METRICS } from "@/lib/metrics/config";
 import type { DataSource } from "@/lib/metrics/types";
 import type {
   AdDailyIn,
@@ -150,7 +150,7 @@ export class BatchBuilder {
       const def = METRICS[r.metric_key];
       if (!def || def.source !== r.source) badKeys.add(`${r.source}:${r.metric_key}`);
       if (!Number.isFinite(r.value)) badKeys.add(`${r.metric_key} (not a number)`);
-      if (r.value < 0 && !r.metric_key.endsWith("_net_new_followers")) negative.add(def?.label ?? r.metric_key);
+      if (r.value < 0 && !canBeNegative(r.metric_key)) negative.add(def?.label ?? r.metric_key);
     }
     if (badKeys.size) errors.push(`Internal mapping error, unknown metrics: ${[...badKeys].join(", ")}`);
     if (negative.size) errors.push(`Negative values found for: ${[...negative].join(", ")}. Check the file.`);

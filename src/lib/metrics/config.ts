@@ -852,6 +852,11 @@ export function getMetric(key: string): MetricDefinition {
   return def;
 }
 
+/** Net follower changes and percent changes (LinkedIn competitors) can be below zero. */
+export function canBeNegative(key: string): boolean {
+  return key.endsWith("_net_new_followers") || key.endsWith("_change");
+}
+
 export function isMetricKey(key: string): boolean {
   return key in METRICS;
 }

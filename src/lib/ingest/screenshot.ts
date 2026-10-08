@@ -7,7 +7,7 @@
  * lives in screenshot-reader.ts.
  */
 import { z } from "zod";
-import { METRICS } from "@/lib/metrics/config";
+import { canBeNegative, METRICS } from "@/lib/metrics/config";
 import type { DataSource } from "@/lib/metrics/types";
 import { BatchBuilder } from "./batch";
 import { num, parseDate } from "./cells";
@@ -276,7 +276,7 @@ export function buildScreenshotResult(data: ReviewedScreenshotData): ParseResult
       b.error(`${labelFor(m.key)}: enter a number.`);
       continue;
     }
-    if (m.value < 0 && !m.key.endsWith("_net_new_followers")) {
+    if (m.value < 0 && !canBeNegative(m.key)) {
       b.error(`${labelFor(m.key)} cannot be negative.`);
       continue;
     }

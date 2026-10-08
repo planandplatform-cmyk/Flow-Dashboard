@@ -215,6 +215,23 @@ describe("LinkedIn competitor comparison", () => {
     expect(rows.filter((x) => x[0] === "li_comp_posts_change")).toEqual([]);
   });
 
+  it("accepts a drop shown by LinkedIn (a negative change)", () => {
+    const r = buildScreenshotResult({
+      platform: "linkedin",
+      period: { start: "2026-09-01", end: "2026-09-30" },
+      campaignName: null,
+      metrics: [],
+      breakdowns: [],
+      competitors: [
+        { company: "MCWL Paladin Geological", own: true, metric: "new_followers", value: 117, change: -29.1 },
+        { company: "Impac Exploration Services", own: false, metric: "engagements", value: 0, change: -100 },
+      ],
+    });
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.batch.period.find((p) => p.metric_key === "li_comp_new_followers_change")?.value).toBeCloseTo(-0.291, 6);
+  });
+
   it("ignores competitor rows for other platforms", () => {
     expect(reviewExtraction(extraction({ competitors }), "meta_facebook", undefined).competitors).toEqual([]);
   });
