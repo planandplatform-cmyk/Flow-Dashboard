@@ -18,3 +18,14 @@ export function createAuthAdminClient() {
   if (!adminApiConfigured()) throw new Error("SUPABASE_SECRET_KEY is not set.");
   return createClient(SUPABASE_URL, SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } }).auth.admin;
 }
+
+/**
+ * Database client with the secret key, for automatic data syncs only (the
+ * nightly job has no signed-in user). It bypasses row-level security, so every
+ * caller is either the cron route (checked with CRON_SECRET) or a server
+ * action that has already checked the viewer is an FFM admin.
+ */
+export function createServiceClient() {
+  if (!adminApiConfigured()) throw new Error("SUPABASE_SECRET_KEY is not set.");
+  return createClient(SUPABASE_URL, SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+}

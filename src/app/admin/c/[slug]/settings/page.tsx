@@ -5,15 +5,21 @@ import { Notice } from "@/components/form";
 import { AdminClientTop } from "@/components/admin-client-top";
 import { PortalHeader } from "@/components/portal-header";
 import { ReportSkeleton } from "@/components/skeleton";
-import { getAdminViewer, getClientSettings, listClientMembers } from "@/lib/data/admin";
+import { serviceAccountEmail } from "@/lib/connectors/google-auth";
+import { getAdminViewer, getClientSettings, getGa4Status, listClientMembers } from "@/lib/data/admin";
 import type { Client } from "@/lib/data/portal";
 import { adminApiConfigured } from "@/lib/supabase/admin";
 import { inviteClientUser, removeClientUser, sendSignInLink, setClientArchived, updateClientAccount } from "../../../actions";
 import { ArchiveClient } from "../../../archive-client";
 import { ClientForm } from "../../../client-form";
 import { Members } from "../../../members";
+import { Ga4Connection } from "./ga4-connection";
+import { connectGa4, disconnectGa4, pullGa4History, syncGa4Now } from "./sync-actions";
 
 export const metadata: Metadata = { title: "Client settings" };
+
+// Connecting GA4 pulls 13 months of history in the same request.
+export const maxDuration = 300;
 
 export default function SettingsPage(props: PageProps<"/admin/c/[slug]/settings">) {
   return (
@@ -29,7 +35,8 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
   if (!viewer) notFound();
   const client = await getClientSettings(slug);
   if (!client) notFound();
-  const members = await listClientMembers(client.id);
+  const [members, ga4] = await Promise.all([listClientMembers(client.id), getGa4Status(client.id)]);
+  const serviceEmail = serviceAccountEmail();
 
   return (
     <>
@@ -47,7 +54,9 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
           </p>
           {!adminApiConfigured() && !viewer.demo && (
             <div className="mb-4">
-              <Notice tone="info">To send invites, add SUPABASE_SECRET_KEY to the environment variables. People who already have a login can still be added.</Notice>
+              <Notice tone="info">
+                To send invites, add SUPABASE_SECRET_KEY to the environment variables. People who already have a login can still be added.
+              </Notice>
             </div>
           )}
           <Members
@@ -65,6 +74,25 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
           <h2 className="mb-4 text-lg font-semibold">Details and channels</h2>
           <ClientForm action={updateClientAccount.bind(null, client.slug)} initial={client} mode="edit" demo={viewer.demo} />
         </section>
+
+        {client.enabled_sources.includes("ga4") && (
+          <section>
+            <h2 className="mb-4 text-lg font-semibold">Automatic data</h2>
+            <p className="mb-4 text-sm text-fg-secondary">
+              Connected channels update every night on their own. Uploads still work for everything else.
+            </p>
+            <Ga4Connection
+              status={ga4}
+              serviceEmail={serviceEmail}
+              ready={Boolean(serviceEmail) && adminApiConfigured()}
+              demo={viewer.demo}
+              connect={connectGa4.bind(null, client.slug)}
+              syncNow={syncGa4Now.bind(null, client.slug)}
+              pullHistory={pullGa4History.bind(null, client.slug)}
+              disconnect={disconnectGa4.bind(null, client.slug)}
+            />
+          </section>
+        )}
 
         <section>
           <h2 className="mb-4 text-lg font-semibold">Archive</h2>

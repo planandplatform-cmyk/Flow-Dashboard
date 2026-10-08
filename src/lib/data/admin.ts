@@ -104,3 +104,35 @@ export async function siteUrl(): Promise<string> {
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;
 }
+
+export interface Ga4Status {
+  propertyId: string | null;
+  status: string;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  runs: { id: string; trigger: string; status: string; period_start: string; period_end: string; rows_upserted: number; error: string | null; started_at: string }[];
+}
+
+/** GA4 connection and recent syncs for the Settings page. */
+export async function getGa4Status(clientId: string): Promise<Ga4Status | null> {
+  if (isDemoMode()) return null;
+  const supabase = await createClient();
+  const [{ data: c }, { data: runs }] = await Promise.all([
+    supabase.from("connections").select("external_account_id, status, last_synced_at, last_error").eq("client_id", clientId).eq("source", "ga4").maybeSingle(),
+    supabase
+      .from("sync_runs")
+      .select("id, trigger, status, period_start, period_end, rows_upserted, error, started_at")
+      .eq("client_id", clientId)
+      .eq("source", "ga4")
+      .order("started_at", { ascending: false })
+      .limit(5),
+  ]);
+  if (!c) return null;
+  return {
+    propertyId: c.external_account_id,
+    status: c.status,
+    lastSyncedAt: c.last_synced_at,
+    lastError: c.last_error,
+    runs: (runs ?? []) as Ga4Status["runs"],
+  };
+}

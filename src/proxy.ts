@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isDemoMode, isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabaseConfigProblem } from "@/lib/supabase/env";
 
-const PUBLIC_PATHS = ["/login", "/auth/"];
+// The cron route checks its own secret (CRON_SECRET), it has no user session.
+const PUBLIC_PATHS = ["/login", "/auth/", "/api/cron/"];
 
 /**
  * Refreshes the Supabase session cookie on every request and sends signed-out
