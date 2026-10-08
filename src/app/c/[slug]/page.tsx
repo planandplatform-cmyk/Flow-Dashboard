@@ -14,6 +14,7 @@ import { ReportSkeleton } from "@/components/skeleton";
 import { Card, DataTable, Prose, Section, ShareBars } from "@/components/section";
 import { TrendCharts } from "@/components/trend-charts";
 import { getClientBySlug, getViewer, isFfm } from "@/lib/data/portal";
+import { createTimer } from "@/lib/timing";
 import { addMonths, daysBetween, formatDay, formatMonth, formatRange, monthsBetween } from "@/lib/dates";
 import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
@@ -35,15 +36,18 @@ export default function ClientReportPage(props: PageProps<"/c/[slug]">) {
 async function ClientReport(props: PageProps<"/c/[slug]">) {
   const [{ slug }, search] = await Promise.all([props.params, props.searchParams]);
 
-  const viewer = await getViewer();
+  const timer = createTimer();
+  const viewer = await timer.time("Sign-in check", getViewer());
   if (!viewer) redirect("/login");
   // RLS returns nothing for clients the viewer cannot access, so this 404s.
-  const client = await getClientBySlug(slug);
+  const client = await timer.time("Client", getClientBySlug(slug));
   if (!client) notFound();
 
   // "Today" decides the preset ranges, so the report always renders per request.
   await connection();
-  const report = await loadReport(client, search);
+  const report = await loadReport(client, search, { timer });
+  const totalMs = timer.total();
+  const showTiming = search.timing === "1" && isFfm(viewer.role);
   const {
     today,
     thisMonth,
@@ -107,6 +111,20 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
       <PortalHeader client={client} viewer={viewer} />
 
       <main className="mx-auto max-w-6xl space-y-16 px-4 pb-24 pt-8 sm:px-6">
+        {showTiming && (
+          <div className="rounded-xl border border-line bg-surface p-4 font-mono text-xs text-fg-secondary">
+            <p className="mb-2 font-sans text-sm font-semibold text-fg">Load time: {totalMs.toLocaleString("en-US")} ms (server)</p>
+            <ul className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+              {report.timings.map((t, i) => (
+                <li key={i} className="flex justify-between gap-3">
+                  <span>{t.label}</span>
+                  <span className={t.ms > 1000 ? "text-negative" : t.ms > 300 ? "text-fg" : ""}>{t.ms.toLocaleString("en-US")} ms</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 font-sans text-fg-muted">Only Flow Forward Media staff see this. Steps in the middle run at the same time, so they overlap.</p>
+          </div>
+        )}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wider text-fg-muted">Reporting period</p>

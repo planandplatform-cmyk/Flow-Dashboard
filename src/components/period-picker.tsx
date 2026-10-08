@@ -65,7 +65,9 @@ export function PeriodPicker(props: PeriodPickerProps) {
 
   const go = (query: string) => {
     setOpen(false);
-    startTransition(() => router.push(`?${query}`, { scroll: false }));
+    // Keep the staff timing view on while switching periods.
+    const timing = new URLSearchParams(window.location.search).get("timing") === "1" ? "&timing=1" : "";
+    startTransition(() => router.push(`?${query}${timing}`, { scroll: false }));
   };
 
   const customOk = from !== "" && to !== "" && to >= from;

@@ -17,6 +17,7 @@ import {
   type Client,
 } from "@/lib/data/portal";
 import { formatDay, isValidMonthParam, monthOf, todayIn } from "@/lib/dates";
+import { createTimer, type Timer } from "@/lib/timing";
 import { compare, MetricResolver, onlyEnabledSources, type DateRange } from "@/lib/metrics/aggregate";
 import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource, type SocialSource } from "@/lib/metrics/types";
@@ -171,7 +172,8 @@ export const videoLabel = (key: string) => `${METRICS[key].source === "meta_inst
 
 type Search = Record<string, string | string[] | undefined>;
 
-export async function loadReport(client: Client, search: Search, opts: { publishedOnly?: boolean } = {}) {
+export async function loadReport(client: Client, search: Search, opts: { publishedOnly?: boolean; timer?: Timer } = {}) {
+  const timer = opts.timer ?? createTimer();
   const today = todayIn(client.timezone);
   const thisMonth = monthOf(today);
 
@@ -180,7 +182,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const needsDefault = !PRESETS.some((p) => p.id === search.range) && !isValidMonthParam(search.month);
   let defaultMonth = thisMonth;
   if (needsDefault) {
-    const [published, latestData] = await Promise.all([getLatestPublishedMonth(client.id), getLatestDataDate(client.id)]);
+    const [published, latestData] = await timer.time("Find default month", Promise.all([getLatestPublishedMonth(client.id), getLatestDataDate(client.id)]));
     defaultMonth = published ?? (latestData ? monthOf(latestData) : thisMonth);
   }
   const period = resolvePeriod(search, { today, defaultMonth });
@@ -190,7 +192,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   // For a calendar month the ads section follows the PDF report: it covers the
   // full window of every campaign that ran during the month, even past month
   // end. For any other range it covers the range itself.
-  const campaigns = enabled.has("meta_ads") ? await getAdCampaigns(client.id, range) : [];
+  const campaigns = enabled.has("meta_ads") ? await timer.time("Meta Ads campaigns", getAdCampaigns(client.id, range)) : [];
   const adsRange: DateRange | null = !campaigns.length
     ? null
     : period.month
@@ -219,13 +221,19 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const socialTrendKeys = SOCIAL_SOURCES.filter((s) => enabled.has(s)).flatMap(channelKeys);
   const annotationRange: DateRange = { start: [months[0], range.start].sort()[0], end: [trendRange.end, range.end].sort().at(-1)! };
 
-  const [allData, trendData, rawCommentary, allPosts, allSnapshots, allAnnotations] = await Promise.all([
-    getMetricData(client.id, fetchRange),
-    getMetricData(client.id, trendRange, { keys: metricDependencies([...trendKeys, ...socialTrendKeys]), totalsOnly: true, monthly: true }),
-    period.month ? getCommentary(client.id, period.month) : Promise.resolve(null),
-    getTopPosts(client.id, range, 8),
-    getAudienceSnapshots(client.id, range),
-    getAnnotations(client.id, annotationRange),
+  const enabledSocialEarly = SOCIAL_SOURCES.filter((s) => enabled.has(s));
+  const [allData, trendData, rawCommentary, allPosts, allSnapshots, allAnnotations, postCounts] = await Promise.all([
+    timer.time("Numbers for this period", getMetricData(client.id, fetchRange)),
+    timer.time(
+      "Numbers for 12-month charts",
+      getMetricData(client.id, trendRange, { keys: metricDependencies([...trendKeys, ...socialTrendKeys]), totalsOnly: true, monthly: true }),
+    ),
+    timer.time("Commentary", period.month ? getCommentary(client.id, period.month) : Promise.resolve(null)),
+    timer.time("Top posts", getTopPosts(client.id, range, 8)),
+    timer.time("Audience breakdowns", getAudienceSnapshots(client.id, range)),
+    timer.time("Events", getAnnotations(client.id, annotationRange)),
+    // Post counts only depend on the range, so they load alongside everything else.
+    timer.time("Post counts", enabledSocialEarly.length ? getPostCounts(client.id, range, enabledSocialEarly) : Promise.resolve({})),
   ]);
 
   // Only the client's turned-on channels appear anywhere in the report,
@@ -251,7 +259,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   const adsCmp = (key: string) => (adsRange && adsCompare ? compare(key, val(key, adsRange), val(key, adsCompare)) : null);
 
   const enabledSocial = SOCIAL_SOURCES.filter((s) => enabled.has(s));
-  const postCounts = enabledSocial.length ? await getPostCounts(client.id, range, enabledSocial) : {};
+
   const social = buildSocial({
     resolver,
     data,
@@ -452,7 +460,9 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     ...(hasSearch ? [{ key: "gsc_clicks", caption: "Clicks from unpaid Google results", label: "Google Search Clicks" }] : []),
   ].slice(0, 3) as { key: string; caption: string; label?: string }[];
 
+  timer.mark("Calculating the report");
   return {
+    timings: timer.steps,
     client,
     today,
     thisMonth,
