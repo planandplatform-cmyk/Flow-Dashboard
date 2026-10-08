@@ -9,7 +9,7 @@ import { serviceAccountEmail } from "@/lib/connectors/google-auth";
 import { DEFAULT_WALKTHROUGH_URL } from "@/lib/clients/share-email";
 import { getAdminViewer, getClientSettings, getConnectionStatus, listClientMembers, siteUrl } from "@/lib/data/admin";
 import { addMonths, formatMonth, monthOf, todayIn } from "@/lib/dates";
-import { SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
+import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
 import type { Client } from "@/lib/data/portal";
 import { adminApiConfigured } from "@/lib/supabase/admin";
 import { inviteClientUser, removeClientUser, sendSignInLink, setClientArchived, updateClientAccount } from "../../../actions";
@@ -120,6 +120,8 @@ async function Settings(props: PageProps<"/admin/c/[slug]/settings">) {
             reportBase={reportBase}
             loginUrl={`${site}/login`}
             channels={client.enabled_sources.map((src) => SOURCE_LABELS[src as DataSource])}
+            hasWebsite={client.enabled_sources.includes("ga4")}
+            hasSocialOrAds={client.enabled_sources.some((src) => (SOCIAL_SOURCES as readonly string[]).includes(src) || src === "meta_ads" || src === "google_ads")}
             months={shareMonths}
             defaultMonth={shareMonths[1].value}
             recipients={members.map((m) => m.email)}

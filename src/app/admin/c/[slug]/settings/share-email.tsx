@@ -17,6 +17,8 @@ export function ShareEmail({
   recipients,
   videoUrl,
   senderName,
+  hasWebsite,
+  hasSocialOrAds,
 }: {
   clientName: string;
   reportBase: string;
@@ -27,19 +29,36 @@ export function ShareEmail({
   recipients: string[];
   videoUrl: string | null;
   senderName: string;
+  hasWebsite: boolean;
+  hasSocialOrAds: boolean;
 }) {
   const [kind, setKind] = useState<Kind>("welcome");
   const [month, setMonth] = useState(defaultMonth);
   const [firstName, setFirstName] = useState("");
+  const [isNew, setIsNew] = useState(false);
+  // Last month is the latest complete report.
+  const last = months[1] ?? months[0];
   const [edited, setEdited] = useState<string | null>(null);
   const [copied, setCopied] = useState<"" | "subject" | "body">("");
   const monthLabel = months.find((m) => m.value === month)?.label ?? month;
   const email = useMemo(
     () =>
       kind === "welcome"
-        ? buildWelcomeEmail({ clientName, firstName, loginUrl, videoUrl, channels, senderName })
+        ? buildWelcomeEmail({
+            clientName,
+            firstName,
+            loginUrl,
+            videoUrl,
+            channels,
+            senderName,
+            hasWebsite,
+            hasSocialOrAds,
+            isNew,
+            lastMonthLabel: last.label,
+            lastMonthUrl: `${reportBase}?month=${last.value}`,
+          })
         : buildShareEmail({ clientName, firstName, monthLabel, reportUrl: `${reportBase}?month=${month}`, videoUrl, senderName }),
-    [kind, clientName, firstName, loginUrl, videoUrl, channels, senderName, monthLabel, reportBase, month],
+    [kind, clientName, firstName, loginUrl, videoUrl, channels, senderName, hasWebsite, hasSocialOrAds, isNew, last, monthLabel, reportBase, month],
   );
   const text = edited ?? email.body;
   // Any change to the inputs rebuilds the message, dropping manual edits.
@@ -90,6 +109,15 @@ export function ShareEmail({
         <Field label="Their first name" htmlFor="share-name" hint="Optional. Leave blank for “Hi there”.">
           <input id="share-name" value={firstName} onChange={(e) => reset(setFirstName)(e.target.value)} className={inputClass} placeholder="Dana" />
         </Field>
+        {kind === "welcome" && (
+          <label className="flex items-start gap-3 self-center rounded-lg border border-line bg-raised p-3">
+            <input type="checkbox" checked={isNew} onChange={(e) => reset(setIsNew)(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal" />
+            <span>
+              <span className="block font-medium text-fg">Brand new client</span>
+              <span className="block text-xs text-fg-muted">No full month reported yet. Tells them when their first full report will be ready.</span>
+            </span>
+          </label>
+        )}
       </div>
 
       <div>
