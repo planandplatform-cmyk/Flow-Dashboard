@@ -32,6 +32,7 @@ const BREAKDOWN_LABELS: Record<BreakdownType, string> = {
   seniority: "Seniority",
   industry: "Industry",
   company_size: "Company size",
+  device: "Device",
 };
 
 const DEFAULT_BUCKETS: Partial<Record<BreakdownType, string[]>> = {

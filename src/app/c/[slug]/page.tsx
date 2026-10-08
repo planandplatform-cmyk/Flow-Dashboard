@@ -68,6 +68,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     salesTiles,
     websiteChannels,
     websitePages,
+    websiteAudience,
     hasSearch,
     searchQueries,
     searchPages,
@@ -310,7 +311,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
               {(
                 [
                   ["Sessions by channel", "Channel", websiteChannels],
-                  ["Top landing pages", "Page", websitePages],
+                  ["Views by page", "Page", websitePages],
                 ] as const
               ).map(([title, first, table]) => (
                 <div key={title}>
@@ -335,6 +336,20 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 </div>
               ))}
             </div>
+            {websiteAudience.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Who visited</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {websiteAudience.map((d) => (
+                    <Card key={d.type} className="p-5">
+                      <h4 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-secondary">{d.title}</h4>
+                      <ShareBars items={d.items.slice(0, 10)} />
+                    </Card>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-fg-muted">Share of website visitors whose details Google Analytics knows.</p>
+              </div>
+            )}
           </Section>
         )}
 

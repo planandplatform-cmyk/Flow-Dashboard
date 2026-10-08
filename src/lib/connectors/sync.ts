@@ -1,10 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DailyIn, PeriodIn } from "@/lib/ingest/types";
+import type { DailyIn, PeriodIn, SnapshotIn } from "@/lib/ingest/types";
 import type { DateRange } from "@/lib/metrics/aggregate";
 import { GoogleAuthError } from "./google-auth";
 import { Ga4Error, runGa4Report } from "./ga4";
-import { ga4Requests, mapGa4Report } from "./ga4-map";
+import { GA4_SNAPSHOT_TYPES, ga4Requests, mapGa4Report } from "./ga4-map";
 import { GscError, runGscReport } from "./gsc";
 import { gscRequests, mapGscReport } from "./gsc-map";
 import { replaceWindow } from "./sync-plan";
@@ -13,7 +13,7 @@ import { replaceWindow } from "./sync-plan";
 export const SYNC_SOURCES = ["ga4", "search_console"] as const;
 export type SyncSource = (typeof SYNC_SOURCES)[number];
 
-type Rows = { daily: DailyIn[]; period: PeriodIn[] };
+type Rows = { daily: DailyIn[]; period: PeriodIn[]; snapshots?: SnapshotIn[] };
 
 /** Every report for a range, fetched a few at a time, as portal rows. */
 async function pull(source: SyncSource, accountId: string, range: DateRange): Promise<Rows[]> {
@@ -106,6 +106,18 @@ export async function syncSource(
       if (error) throw new Error(`Saving monthly numbers failed: ${error.message}`);
     }
 
+    // Visitor demographics (GA4): one set per month, as shares.
+    const snapshots = dedupe(
+      reports.flatMap((r) => r.snapshots ?? []),
+      (r: SnapshotIn) => `${r.snapshot_date}|${r.breakdown_type}|${r.bucket}`,
+    ).map((r) => ({ ...r, client_id: target.clientId, sync_run_id: runId, upload_id: null, updated_at: stamp.updated_at }));
+    for (let i = 0; i < snapshots.length; i += CHUNK) {
+      const { error } = await db
+        .from("audience_snapshots")
+        .upsert(snapshots.slice(i, i + CHUNK), { onConflict: "client_id,platform,snapshot_date,breakdown_type,bucket" });
+      if (error) throw new Error(`Saving visitor demographics failed: ${error.message}`);
+    }
+
     // Everything else this channel had for these dates is replaced by this pull.
     const win = replaceWindow(range);
     const notThisRun = `sync_run_id.is.null,sync_run_id.neq.${runId}`;
@@ -127,8 +139,20 @@ export async function syncSource(
       .lte("period_end", win.period.end)
       .or(notThisRun);
     if (stalePeriod.error) throw new Error(`Clearing old monthly numbers failed: ${stalePeriod.error.message}`);
+    if (target.source === "ga4") {
+      const staleSnapshots = await db
+        .from("audience_snapshots")
+        .delete()
+        .eq("client_id", target.clientId)
+        .eq("platform", "ga4")
+        .in("breakdown_type", GA4_SNAPSHOT_TYPES)
+        .gte("snapshot_date", win.period.start)
+        .lte("snapshot_date", win.period.end)
+        .or(notThisRun);
+      if (staleSnapshots.error) throw new Error(`Clearing old visitor demographics failed: ${staleSnapshots.error.message}`);
+    }
 
-    const rows = daily.length + period.length;
+    const rows = daily.length + period.length + snapshots.length;
     const now = new Date().toISOString();
     await db.from("sync_runs").update({ status: "succeeded", rows_upserted: rows, finished_at: now }).eq("id", runId);
     await db.from("connections").update({ status: "active", last_synced_at: now, last_error: null, last_error_at: null, updated_at: now }).eq("id", target.connectionId);

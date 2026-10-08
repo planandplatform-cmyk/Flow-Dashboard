@@ -106,12 +106,21 @@ export const AUCTION_KEYS = [
   "gads_outranking_share",
 ] as const;
 
+/** Website visitor breakdowns from GA4, in display order. */
+export const WEBSITE_AUDIENCE: { type: string; title: string }[] = [
+  { type: "age", title: "Visitors by age" },
+  { type: "gender", title: "Visitors by gender" },
+  { type: "device", title: "Visitors by device" },
+  { type: "country", title: "Top countries" },
+  { type: "city", title: "Top cities" },
+];
+
 /** Short column headings for website tables. */
 export const WEBSITE_COLUMNS: Record<string, string> = {
   ga4_sessions: "Sessions",
   ga4_page_views: "Views",
   ga4_engagement_rate: "Engagement",
-  ga4_avg_engagement_time: "Avg. Time",
+  ga4_avg_engagement_time: "Avg. Engagement",
   ga4_key_events: "Key Events",
   ga4_revenue: "Sales",
 };
@@ -269,7 +278,16 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     return { keys, rows };
   };
   const websiteChannels = websiteTable("ga4_sessions", "channel", ["ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 10);
-  const websitePages = websiteTable("ga4_page_views", "landing_page", ["ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 8);
+  const websitePages = websiteTable("ga4_page_views", "landing_page", ["ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 8);
+  // Who visited the website (GA4), for the months in this range.
+  const websiteAudience = hasWebsite
+    ? WEBSITE_AUDIENCE.map((d) => ({
+        ...d,
+        items: snapshotsOf(snapshots, "ga4", d.type)
+          .filter((x) => x.snapshot_date >= range.start)
+          .sort((a, b) => (d.type === "age" ? a.bucket.localeCompare(b.bucket) : b.share - a.share)),
+      })).filter((d) => d.items.length > 0)
+    : [];
   // Google Search (Search Console): rankings for the search terms people used.
   const hasSearch = enabled.has("search_console") && val("gsc_impressions") !== null;
   const searchTable = (dimension: "query" | "page", limit: number) =>
@@ -431,6 +449,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     salesTiles,
     websiteChannels,
     websitePages,
+    websiteAudience,
     hasSearch,
     searchQueries,
     searchPages,

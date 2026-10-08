@@ -236,7 +236,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
             {(
               [
                 ["Sessions by channel", "Channel", r.websiteChannels],
-                ["Top landing pages", "Page", r.websitePages],
+                ["Views by page", "Page", r.websitePages],
               ] as const
             )
               .filter(([, , table]) => table.rows.length > 0)
@@ -256,6 +256,24 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                   </View>
                 );
               })}
+            {r.websiteAudience.length > 0 && (
+              <View style={{ marginTop: 10 }}>
+                <Text style={[s.label, { marginBottom: 4 }]}>Who visited</Text>
+                {[r.websiteAudience.slice(0, 3), r.websiteAudience.slice(3)]
+                  .filter((row) => row.length > 0)
+                  .map((row, i) => (
+                    <View key={i} style={[s.row, { marginTop: i ? 6 : 0 }]} wrap={false}>
+                      {row.map((d) => (
+                        <ShareCard key={d.type} s={s} t={t} title={d.title} items={d.items} />
+                      ))}
+                      {/* Keep cards the same width when a row is short. */}
+                      {Array.from({ length: 3 - row.length }, (_, k) => (
+                        <View key={`pad-${k}`} style={{ flex: 1 }} />
+                      ))}
+                    </View>
+                  ))}
+              </View>
+            )}
           </View>
         )}
 

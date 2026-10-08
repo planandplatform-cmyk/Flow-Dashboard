@@ -35,6 +35,7 @@ const BREAKDOWN_LABELS: Record<BreakdownType, string> = {
   seniority: "Seniority",
   industry: "Industry",
   company_size: "Company size",
+  device: "Device",
 };
 
 const MAX_EDGE = 2576; // the model reads up to this many pixels on the long edge

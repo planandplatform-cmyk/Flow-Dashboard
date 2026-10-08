@@ -14,6 +14,18 @@ describe("GA4 reports", () => {
   it("asks for daily totals once and whole months for every month touched", () => {
     const reqs = ga4Requests({ start: "2026-09-08", end: "2026-10-07" });
     expect(reqs.filter((r) => r.id === "daily")).toHaveLength(1);
+    expect(reqs.filter((r) => r.id.startsWith("month-demo-")).map((r) => r.body.dimensions[0].name)).toEqual([
+      "userAgeBracket",
+      "userGender",
+      "deviceCategory",
+      "country",
+      "city",
+      "userAgeBracket",
+      "userGender",
+      "deviceCategory",
+      "country",
+      "city",
+    ]);
     const months = reqs.filter((r) => r.id === "month-users").map((r) => r.period);
     expect(months).toEqual([
       { start: "2026-09-01", end: "2026-09-30" },
@@ -82,6 +94,34 @@ describe("GA4 time and sales", () => {
       ["ga4_revenue", "2026-09-04", 249.5],
       ["ga4_transactions", "2026-09-04", 2],
     ]);
+  });
+});
+
+describe("GA4 visitor demographics", () => {
+  it("stores shares of known visitors per month, top groups only", () => {
+    const reqs = ga4Requests({ start: "2026-09-01", end: "2026-09-30" });
+    const gender = reqs.find((r) => r.id === "month-demo-userGender")!;
+    const out = mapGa4Report(gender, {
+      dimensionHeaders: [{ name: "userGender" }],
+      metricHeaders: [{ name: "totalUsers" }],
+      rows: [
+        { dimensionValues: [{ value: "male" }], metricValues: [{ value: "60" }] },
+        { dimensionValues: [{ value: "female" }], metricValues: [{ value: "40" }] },
+        { dimensionValues: [{ value: "unknown" }], metricValues: [{ value: "300" }] },
+      ],
+    });
+    expect(out.snapshots).toEqual([
+      { platform: "ga4", snapshot_date: "2026-09-30", period_start: "2026-09-01", breakdown_type: "gender", bucket: "Male", share: 0.6 },
+      { platform: "ga4", snapshot_date: "2026-09-30", period_start: "2026-09-01", breakdown_type: "gender", bucket: "Female", share: 0.4 },
+    ]);
+    const cities = reqs.find((r) => r.id === "month-demo-city")!;
+    const many = mapGa4Report(cities, {
+      dimensionHeaders: [{ name: "city" }],
+      metricHeaders: [{ name: "totalUsers" }],
+      rows: Array.from({ length: 15 }, (_, i) => ({ dimensionValues: [{ value: `City ${i}` }], metricValues: [{ value: String(15 - i) }] })),
+    });
+    expect(many.snapshots).toHaveLength(10);
+    expect(many.snapshots[0]).toMatchObject({ breakdown_type: "city", bucket: "City 0", share: Math.round((15 / 120) * 10000) / 10000 });
   });
 });
 

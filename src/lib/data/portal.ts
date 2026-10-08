@@ -312,7 +312,7 @@ export async function getAudienceSnapshots(clientId: string, range: DateRange): 
       .eq("client_id", clientId)
       .lte("snapshot_date", range.end)
       .order("snapshot_date", { ascending: false })
-      .limit(500);
+      .limit(3000);
     if (error) throw new Error(error.message);
     rows = (data ?? []).map((s) => ({ ...s, share: Number(s.share) })) as AudienceSnapshot[];
   }

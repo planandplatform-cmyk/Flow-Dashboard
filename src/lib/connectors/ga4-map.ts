@@ -4,10 +4,11 @@
  *
  * Daily: totals and sessions by channel, so any date range is exact.
  * Monthly: visitors (unique, so only correct for the exact month), visitors
- * by channel, and the top landing pages and pages, which would be too many
- * rows by day.
+ * by channel, the top landing pages and pages, which would be too many
+ * rows by day, and who the visitors were (age, gender, device, country,
+ * city) as each group's share of visitors.
  */
-import type { DailyIn, PeriodIn } from "@/lib/ingest/types";
+import type { BreakdownType, DailyIn, PeriodIn, SnapshotIn } from "@/lib/ingest/types";
 import { monthRange, monthsBetween } from "@/lib/dates";
 import type { DateRange } from "@/lib/metrics/aggregate";
 
@@ -115,15 +116,56 @@ export function ga4Requests(range: DateRange): Ga4ReportRequest[] {
           orderBys: by("screenPageViews"),
         },
       },
+      ...DEMOGRAPHICS.map(({ dimension }) => ({
+        id: `month-demo-${dimension}`,
+        period,
+        body: { dateRanges: dr(period), dimensions: m(dimension), metrics: m("totalUsers"), limit: 250, orderBys: by("totalUsers") },
+      })),
     );
   }
   return requests;
 }
 
+/** Visitor demographics: GA4 dimension, how it is stored, and how many groups to keep. */
+export const DEMOGRAPHICS: { dimension: string; type: BreakdownType; keep: number }[] = [
+  { dimension: "userAgeBracket", type: "age", keep: 10 },
+  { dimension: "userGender", type: "gender", keep: 5 },
+  { dimension: "deviceCategory", type: "device", keep: 5 },
+  { dimension: "country", type: "country", keep: 10 },
+  { dimension: "city", type: "city", keep: 10 },
+];
+export const GA4_SNAPSHOT_TYPES = DEMOGRAPHICS.map((d) => d.type);
+
+const UNKNOWN = new Set(["", "(not set)", "unknown", "(other)"]);
+const title = (v: string) => (/^[a-z]+$/.test(v) ? v[0].toUpperCase() + v.slice(1) : v);
+
+/** One demographics report as shares of known visitors, top groups only. */
+function mapDemographics(req: Ga4ReportRequest, res: Ga4ReportResponse): SnapshotIn[] {
+  const demo = DEMOGRAPHICS.find((d) => req.id === `month-demo-${d.dimension}`);
+  if (!demo || !req.period) return [];
+  const rows = (res.rows ?? [])
+    .map((r) => ({ bucket: r.dimensionValues[0]?.value ?? "", users: Number(r.metricValues[0]?.value) }))
+    .filter((r) => !UNKNOWN.has(r.bucket.toLowerCase()) && Number.isFinite(r.users) && r.users > 0);
+  const total = rows.reduce((a, r) => a + r.users, 0);
+  if (!total) return [];
+  return rows
+    .sort((a, b) => b.users - a.users)
+    .slice(0, demo.keep)
+    .map((r) => ({
+      platform: "ga4",
+      snapshot_date: req.period!.end,
+      period_start: req.period!.start,
+      breakdown_type: demo.type,
+      bucket: title(r.bucket).slice(0, 200),
+      share: Math.round((r.users / total) * 10000) / 10000,
+    }));
+}
+
 const isoDate = (yyyymmdd: string) => `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 
 /** Turn one report's rows into portal rows. */
-export function mapGa4Report(req: Ga4ReportRequest, res: Ga4ReportResponse): { daily: DailyIn[]; period: PeriodIn[] } {
+export function mapGa4Report(req: Ga4ReportRequest, res: Ga4ReportResponse): { daily: DailyIn[]; period: PeriodIn[]; snapshots: SnapshotIn[] } {
+  if (req.id.startsWith("month-demo-")) return { daily: [], period: [], snapshots: mapDemographics(req, res) };
   const dims = (res.dimensionHeaders ?? []).map((h) => h.name);
   const mets = (res.metricHeaders ?? []).map((h) => h.name);
   const daily: DailyIn[] = [];
@@ -170,7 +212,7 @@ export function mapGa4Report(req: Ga4ReportRequest, res: Ga4ReportResponse): { d
       }
     });
   }
-  return { daily, period };
+  return { daily, period, snapshots: [] };
 }
 
 /** Plain-English reason for a GA4 API error. */

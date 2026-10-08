@@ -76,7 +76,8 @@ export type BreakdownType =
   | "job_function"
   | "seniority"
   | "industry"
-  | "company_size";
+  | "company_size"
+  | "device";
 
 export interface SnapshotIn {
   platform: DataSource;

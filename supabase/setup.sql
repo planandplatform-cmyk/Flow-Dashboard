@@ -1112,3 +1112,9 @@ alter type public.data_source add value if not exists 'google_ads';
 -- ====================================================================
 -- Google Search Console: search rankings as a channel.
 alter type public.data_source add value if not exists 'search_console';
+
+-- ====================================================================
+-- 20261014000001_device_breakdown.sql
+-- ====================================================================
+-- Website visitors by device (desktop, mobile, tablet), pulled from GA4.
+alter type public.breakdown_type add value if not exists 'device';

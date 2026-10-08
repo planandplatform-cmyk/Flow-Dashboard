@@ -76,8 +76,11 @@ under **Recent syncs**. Common fixes:
 
 ## What it pulls (GA4, continued)
 
-- Average time on site (engagement time per visit), overall, by channel and by
+- Average engagement time per session, overall, by channel and by
   landing page.
+- Visitors by age, gender, device, country and city, each month. Age and
+  gender need Google Signals turned on in GA4 (Admin, Data collection);
+  without it GA4 does not report them and those charts stay hidden.
 - Online sales, orders, average order value and order rate, for sites with
   GA4 ecommerce tracking (Shopify and other stores). The Online sales row only
   appears when GA4 has sales.

@@ -112,7 +112,7 @@ export function buildMonthFacts(input: FactsInput): MonthFacts {
       const channels = resolver.breakdown("ga4_sessions", "channel", range).slice(0, 5);
       if (channels.length) details.push(`Sessions by channel: ${channels.map((c) => `${c.bucket} ${formatMetric("ga4_sessions", c.value)}`).join(", ")}`);
       const pages = resolver.breakdown("ga4_page_views", "landing_page", range).slice(0, 5);
-      if (pages.length) details.push(`Top landing pages by views: ${pages.map((p) => `${p.bucket} ${formatMetric("ga4_page_views", p.value)}`).join(", ")}`);
+      if (pages.length) details.push(`Views by page: ${pages.map((p) => `${p.bucket} ${formatMetric("ga4_page_views", p.value)}`).join(", ")}`);
     }
     if (source === "search_console") {
       const queries = resolver.breakdown("gsc_clicks", "query", range).slice(0, 8);

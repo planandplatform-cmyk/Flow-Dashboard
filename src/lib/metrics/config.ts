@@ -99,8 +99,9 @@ const definitions: MetricDefinition[] = [
   {
     key: "ga4_avg_engagement_time",
     source: "ga4",
-    label: "Avg. Time on Site",
-    definition: "How long the average visit actively spent on your website. Longer means people are reading and exploring, not leaving right away.",
+    label: "Avg. Engagement Time per Session",
+    definition:
+      "How long each visit (session) actively spent on your website, on average, with the page open and in view. Longer means people are reading and exploring, not leaving right away.",
     format: "duration",
     aggregation: ratio("ga4_engagement_minutes", "ga4_sessions"),
     upIsGood: true,
