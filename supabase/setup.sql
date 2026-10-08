@@ -1092,7 +1092,13 @@ alter type public.breakdown_type add value if not exists 'format_views';
 -- ====================================================================
 -- Screenshots and report PDFs now go straight from the browser to Storage
 -- (not through the app server), so files can be larger: 25 MB each.
-update storage.buckets set file_size_limit = 26214400 where id = 'uploads';
+do $$
+begin
+  if exists (select 1 from pg_namespace where nspname = 'storage') then
+    update storage.buckets set file_size_limit = 26214400 where id = 'uploads';
+  end if;
+end;
+$$;
 
 -- ====================================================================
 -- 20261012000001_google_ads.sql
