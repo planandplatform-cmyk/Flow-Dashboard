@@ -73,6 +73,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: unique,
     upIsGood: true,
+    dimensions: ["channel", "landing_page"],
   },
   {
     key: "ga4_page_views",

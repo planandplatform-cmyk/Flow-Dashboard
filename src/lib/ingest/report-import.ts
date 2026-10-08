@@ -59,7 +59,7 @@ export function reportSchema(platforms: ScreenshotPlatform[]) {
         z.object({
           key: z.enum((tableKeys.length ? tableKeys : ["ga4_sessions"]) as [string, ...string[]]),
           dimension: z.enum(["channel", "landing_page"]),
-          bucket: z.string().describe("Row label exactly as printed, e.g. 'Organic Search' or '/careers'"),
+          bucket: z.string().describe("Channel name as printed, e.g. 'Organic Search', or for pages the path only, e.g. '/careers'"),
           value: z.number(),
           page: z.number(),
         }),
@@ -162,10 +162,18 @@ export function reviewReport(extraction: ReportExtraction, platforms: Screenshot
   extraction.notes.forEach((n) => warnings.add(n));
   if (!items.length && !extraction.table_rows.length && !breakdowns.length && !competitors.length) errors.add("No numbers could be read from this report.");
 
+  // Table rows the portal cannot store are left out with a note, never blocking the save.
+  const storable = (t: ReportExtraction["table_rows"][number]) => (METRICS[t.key]?.dimensions ?? []).includes(t.dimension);
+  const skipped = extraction.table_rows.filter((t) => !storable(t));
+  if (skipped.length) {
+    const tables = [...new Set(skipped.map((t) => `${METRICS[t.key]?.label ?? t.key} by ${t.dimension === "channel" ? "channel" : "page"}`))];
+    warnings.add(`Left out ${skipped.length} table rows the portal does not store (${tables.join(", ")}).`);
+  }
+
   return {
     period,
     items,
-    tableRows: extraction.table_rows.map((t) => ({ key: t.key, dimension: t.dimension, bucket: t.bucket, value: t.value, page: t.page })),
+    tableRows: extraction.table_rows.filter(storable).map((t) => ({ key: t.key, dimension: t.dimension, bucket: t.bucket, value: t.value, page: t.page })),
     breakdowns,
     competitors,
     commentary: extraction.commentary,

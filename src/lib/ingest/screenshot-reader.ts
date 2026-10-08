@@ -100,7 +100,7 @@ Report only numbers printed in the report, exactly as printed. Never estimate or
 
 Skip percent changes, prior-period values, and rates such as engagement rate, CTR, DAU/MAU, or cost per result: the portal calculates rates itself. Durations are reported in minutes.
 
-For LinkedIn, report Reactions, Comments, and Reposts as their own keys; report New followers as li_net_new_followers and Total followers as li_followers. For website tables, report each row of sessions by channel, sessions by landing page, and views by page path in table_rows.
+For LinkedIn, report Reactions, Comments, and Reposts as their own keys; report New followers as li_net_new_followers and Total followers as li_followers. For website tables, report each row of sessions or users by channel, sessions or users by landing page, and views by page path in table_rows. For page rows use the path only, such as "/" or "/careers", even when the report shows a title like "Homepage (/)".
 
 Copy the report's own headline or key takeaway, executive summary, and conclusion into commentary, word for word.`;
 

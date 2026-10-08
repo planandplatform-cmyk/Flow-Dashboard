@@ -105,6 +105,39 @@ describe("importing a full report", () => {
     }
   });
 
+  it("keeps users by channel (MCWL July) and leaves out tables it cannot store, without blocking", () => {
+    const july = reviewReport(
+      {
+        ...extraction,
+        date_range: { start: "2026-07-01", end: "2026-07-31", label: "July 1 to July 31, 2026" },
+        table_rows: [
+          { key: "ga4_users", dimension: "channel", bucket: "Direct", value: 544, page: 2 },
+          { key: "ga4_users", dimension: "channel", bucket: "AI Assistant", value: 4, page: 2 },
+          { key: "ga4_page_views", dimension: "channel", bucket: "Direct", value: 1, page: 2 },
+        ],
+      },
+      ["ga4", "linkedin"],
+      undefined,
+    );
+    expect(july.errors).toEqual([]);
+    expect(july.tableRows.map((t) => [t.key, t.bucket, t.value])).toEqual([
+      ["ga4_users", "Direct", 544],
+      ["ga4_users", "AI Assistant", 4],
+    ]);
+    expect(july.warnings.join(" ")).toMatch(/Left out 1 table rows/);
+    const [ga4] = splitReport({
+      period: { start: "2026-07-01", end: "2026-07-31" },
+      metrics: [],
+      tableRows: july.tableRows,
+      breakdowns: [],
+      competitors: [],
+      commentary: null,
+    });
+    const r = buildScreenshotResult(ga4);
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
   it("only allows the client's channels", () => {
     const schema = reportSchema(["ga4"]);
     const bad = { ...extraction, metrics: [m("li_impressions", 1, 1)] };
