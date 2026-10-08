@@ -75,9 +75,9 @@ follower total, so enter it with **Enter manually** each month.
 For numbers that are easier to screenshot or save as a PDF than export as a spreadsheet.
 **Manage data > Screenshots & PDFs**:
 
-1. Choose the platform. Add up to 5 files: drag them in, choose them, or paste a screenshot with
+1. Choose the platform. Add up to 20 files: drag them in, choose them, or paste a screenshot with
    Ctrl+V / Cmd+V straight after taking it. PDFs (a GA4 or Meta report export, or a page saved as
-   PDF) can be up to 3.5 MB each, 4 MB in total.
+   PDF) can be up to 25 MB each; keep a batch to about 100 PDF pages in total.
 2. **Read numbers.** AI reads the numbers (15 to 60 seconds). Nothing is saved yet.
 3. Check every value against the original (click **#1**, **#2** to see which file it came
    from). Fix anything wrong, untick anything you don't want, and confirm the dates.
@@ -90,7 +90,7 @@ Only this tab uses AI, and nothing it reads is saved until a person checks it.
 ## Importing a full past report
 
 For months you already reported on: **Manage data > Import a full report**. Drop in the whole
-monthly report PDF (website, social and ads together, up to 3.5 MB) and press **Read report**.
+monthly report PDF (website, social and ads together, up to 25 MB and about 100 pages) and press **Read report**.
 
 - AI reads every section and files each number under its platform for the report's month:
   totals, website tables (sessions by channel, landing pages, top pages), audience and follower
@@ -125,7 +125,11 @@ Rates (engagement rate, CTR, cost per lead) are ignored on purpose: the portal w
 from the underlying numbers. On LinkedIn, reactions, comments, reposts and clicks are added up into
 Interactions.
 
-Reading costs roughly 5 to 25 cents per batch, depending on how many files and pages. It needs `ANTHROPIC_API_KEY` set in Vercel.
+Files go straight from your browser to the portal's private storage, and the AI reads them
+from there through links that expire after an hour.
+
+Reading costs roughly 5 to 25 cents per batch of a few files; a 20-file batch or a long report
+costs more, up to about a dollar. It needs `ANTHROPIC_API_KEY` set in Vercel.
 
 ## Enter manually
 

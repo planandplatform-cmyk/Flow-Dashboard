@@ -7,8 +7,22 @@ import { extractionSchema, metricGuide, type Extraction, type ScreenshotPlatform
 
 const MODEL = "claude-opus-5-5";
 
-/** A screenshot or a PDF report, base64 encoded. */
-export type ScreenshotImage = { data: string; mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "application/pdf" };
+/** A screenshot or a PDF report: a short-lived link to it in Storage, or (demo mode) its base64 data. */
+export type ScreenshotImage = {
+  mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "application/pdf";
+} & ({ url: string; data?: undefined } | { data: string; url?: undefined });
+
+/** The content block for one file. */
+function fileBlock(img: ScreenshotImage): Anthropic.Beta.BetaContentBlockParam {
+  if (img.mediaType === "application/pdf") {
+    return img.url
+      ? { type: "document", source: { type: "url", url: img.url } }
+      : { type: "document", source: { type: "base64", media_type: "application/pdf", data: img.data! } };
+  }
+  return img.url
+    ? { type: "image", source: { type: "url", url: img.url } }
+    : { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data! } };
+}
 
 export class ScreenshotReadError extends Error {}
 
@@ -57,17 +71,10 @@ Report the date range shown in the files as exact dates if visible. If only a re
         {
           role: "user",
           content: [
-            ...images.flatMap((img, i): Anthropic.Beta.BetaContentBlockParam[] =>
-              img.mediaType === "application/pdf"
-                ? [
-                    { type: "text" as const, text: `File ${i + 1} (PDF):` },
-                    { type: "document" as const, source: { type: "base64" as const, media_type: img.mediaType, data: img.data } },
-                  ]
-                : [
-                    { type: "text" as const, text: `File ${i + 1} (screenshot):` },
-                    { type: "image" as const, source: { type: "base64" as const, media_type: img.mediaType, data: img.data } },
-                  ],
-            ),
+            ...images.flatMap((img, i): Anthropic.Beta.BetaContentBlockParam[] => [
+              { type: "text", text: `File ${i + 1} (${img.mediaType === "application/pdf" ? "PDF" : "screenshot"}):` },
+              fileBlock(img),
+            ]),
             { type: "text", text: instructions },
           ],
         },
@@ -124,9 +131,7 @@ Report the reporting period as exact dates.`;
         {
           role: "user",
           content: [
-            file.mediaType === "application/pdf"
-              ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: file.data } }
-              : { type: "image", source: { type: "base64", media_type: file.mediaType, data: file.data } },
+            fileBlock(file),
             { type: "text", text: instructions },
           ],
         },

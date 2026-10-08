@@ -16,9 +16,13 @@ import type { BreakdownType, ParseResult, Period } from "./types";
 export const SCREENSHOT_PLATFORMS = ["ga4", "meta_facebook", "meta_instagram", "meta_ads", "linkedin"] as const;
 export type ScreenshotPlatform = (typeof SCREENSHOT_PLATFORMS)[number];
 
-export const MAX_SCREENSHOTS = 5;
-export const MAX_SCREENSHOT_BYTES = 3_500_000; // per file (images after browser downscaling)
-export const MAX_SCREENSHOTS_TOTAL_BYTES = 4_000_000; // request body limit with headroom
+/** Files per batch. Claude reads up to 20 images at full detail, and PDFs up to about 100 pages. */
+export const MAX_SCREENSHOTS = 20;
+/** Per file. Files go straight from the browser to Storage, so the app server's request limit does not apply. */
+export const MAX_FILE_BYTES = 25_000_000;
+// Demo mode (no Supabase) sends files through the server, which caps requests at ~4.5 MB.
+export const MAX_SCREENSHOT_BYTES = 3_500_000;
+export const MAX_SCREENSHOTS_TOTAL_BYTES = 4_000_000;
 export const SCREENSHOT_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"] as const;
 
 /**

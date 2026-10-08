@@ -10,12 +10,12 @@ import { reportPlatforms, reviewReport, splitReport, type ReportReview, type Rev
 import {
   buildScreenshotResult,
   COMPETITOR_METRICS,
-  MAX_SCREENSHOT_BYTES,
   SCREENSHOT_BREAKDOWNS,
   SCREENSHOT_PLATFORMS,
   type ScreenshotPlatform,
 } from "@/lib/ingest/screenshot";
-import { readReport, screenshotReadingConfigured, ScreenshotReadError, type ScreenshotImage } from "@/lib/ingest/screenshot-reader";
+import { readReport, screenshotReadingConfigured, ScreenshotReadError } from "@/lib/ingest/screenshot-reader";
+import { resolveFiles } from "@/lib/ingest/staged-server";
 import { SOURCE_LABELS } from "@/lib/metrics/types";
 import { isDemoMode } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -31,16 +31,6 @@ export type ReportReadState =
   | { status: "error"; message: string }
   | ({ status: "ready"; platforms: ScreenshotPlatform[]; demo: boolean; hasCommentary: boolean } & ReportReview);
 
-const TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
-
-async function readFile(form: FormData): Promise<{ file: File; image: ScreenshotImage } | { error: string }> {
-  const file = form.getAll("images").find((f): f is File => f instanceof File && f.size > 0);
-  if (!file) return { error: "Add the report PDF." };
-  if (!TYPES.includes(file.type)) return { error: `${file.name} is not a PDF or image.` };
-  if (file.size > MAX_SCREENSHOT_BYTES) return { error: `${file.name} is over 3.5 MB. Export a smaller PDF, or import the website and social pages separately.` };
-  return { file, image: { data: Buffer.from(await file.arrayBuffer()).toString("base64"), mediaType: file.type as ScreenshotImage["mediaType"] } };
-}
-
 export async function readReportUpload(slug: string, _prev: ReportReadState, form: FormData): Promise<ReportReadState> {
   const auth = await authorizeStaffForClient(slug);
   if ("error" in auth) return { status: "error", message: auth.error };
@@ -49,12 +39,12 @@ export async function readReportUpload(slug: string, _prev: ReportReadState, for
   if (!platforms.length) return { status: "error", message: `${auth.client.name} has no website, Facebook, Instagram, Meta Ads or LinkedIn channel turned on.` };
   const entered = readPeriod(form);
   if (entered === "invalid") return { status: "error", message: "Enter a valid start and end date." };
-  const f = await readFile(form);
+  const f = await resolveFiles(form, auth.client.id, 1);
   if ("error" in f) return { status: "error", message: f.error };
 
   let extraction;
   try {
-    extraction = await readReport(f.image, platforms, new Date().toISOString().slice(0, 10));
+    extraction = await readReport(f.images[0], platforms, new Date().toISOString().slice(0, 10));
   } catch (e) {
     return { status: "error", message: e instanceof ScreenshotReadError ? e.message : "Something went wrong reading the report." };
   }
@@ -108,15 +98,15 @@ export async function saveReportUpload(slug: string, form: FormData): Promise<Re
   if (failed.length) {
     return { status: "error", message: failed.map((b) => `${SOURCE_LABELS[b.part.platform]}: ${b.result.errors.join(" ")}`).join(" ") };
   }
-  const f = await readFile(form);
+  const f = await resolveFiles(form, auth.client.id, 1);
   if ("error" in f) return { status: "error", message: f.error };
+  if (!f.folder) return { status: "error", message: "The uploaded report could not be found. Add it again." };
 
-  // Keep the report once, as evidence for every value it supplied.
+  // The report is already in Storage (uploaded from the browser) and stays
+  // with every platform's upload as evidence.
   const supabase = await createClient();
-  const folder = `${auth.client.id}/${crypto.randomUUID()}`;
-  const path = `${folder}/${f.file.name.replace(/[^\w.\-]+/g, "_").slice(-100)}`;
-  const { error: storeError } = await supabase.storage.from("uploads").upload(path, f.file, { contentType: f.file.type, upsert: false });
-  if (storeError) return { status: "error", message: `Could not store the report: ${storeError.message}` };
+  const folder = f.folder;
+  const fileName = f.names[0];
 
   const saved: { platform: string; inserted: number; updated: number }[] = [];
   for (const { part, result } of built) {
@@ -126,7 +116,7 @@ export async function saveReportUpload(slug: string, form: FormData): Promise<Re
       p_client_id: auth.client.id,
       p_source: part.platform,
       p_kind: "file",
-      p_file_name: f.file.name.slice(0, 500),
+      p_file_name: fileName.slice(0, 500),
       p_storage_path: folder,
       p_parser: "report",
       p_period_start: reviewed.period.start,

@@ -6,13 +6,9 @@ import type { UploadOverlap } from "@/lib/data/uploads";
 import { readPeriod } from "@/lib/ingest/manual";
 import {
   buildScreenshotResult,
-  MAX_SCREENSHOT_BYTES,
-  MAX_SCREENSHOTS,
-  MAX_SCREENSHOTS_TOTAL_BYTES,
   reviewExtraction,
   SCREENSHOT_BREAKDOWNS,
   SCREENSHOT_PLATFORMS,
-  SCREENSHOT_TYPES,
   type BreakdownReviewItem,
   type CompetitorReviewItem,
   COMPETITOR_METRICS,
@@ -20,7 +16,8 @@ import {
   type ReviewItem,
   type ScreenshotPlatform,
 } from "@/lib/ingest/screenshot";
-import { readScreenshots, screenshotReadingConfigured, ScreenshotReadError, type ScreenshotImage } from "@/lib/ingest/screenshot-reader";
+import { readScreenshots, screenshotReadingConfigured, ScreenshotReadError } from "@/lib/ingest/screenshot-reader";
+import { resolveFiles } from "@/lib/ingest/staged-server";
 import type { Period } from "@/lib/ingest/types";
 import { isDemoMode } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -53,29 +50,6 @@ function readPlatform(value: FormDataEntryValue | null): ScreenshotPlatform | nu
   return (SCREENSHOT_PLATFORMS as readonly string[]).includes(s) ? (s as ScreenshotPlatform) : null;
 }
 
-async function readImages(form: FormData): Promise<{ images: ScreenshotImage[]; files: File[] } | { error: string }> {
-  const files = form.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
-  if (!files.length) return { error: "Add at least one screenshot or PDF." };
-  if (files.length > MAX_SCREENSHOTS) return { error: `Upload up to ${MAX_SCREENSHOTS} files at a time.` };
-  let total = 0;
-  const images: ScreenshotImage[] = [];
-  for (const f of files) {
-    if (!(SCREENSHOT_TYPES as readonly string[]).includes(f.type)) return { error: `${f.name} is not a PDF or a PNG, JPEG, WebP or GIF image.` };
-    if (f.size > MAX_SCREENSHOT_BYTES) {
-      return {
-        error:
-          f.type === "application/pdf"
-            ? `${f.name} is too large (over 3.5 MB). Save only the pages with the numbers, or export a smaller PDF.`
-            : `${f.name} is too large. Crop it to the analytics area and try again.`,
-      };
-    }
-    total += f.size;
-    images.push({ data: Buffer.from(await f.arrayBuffer()).toString("base64"), mediaType: f.type as ScreenshotImage["mediaType"] });
-  }
-  if (total > MAX_SCREENSHOTS_TOTAL_BYTES) return { error: "These files are too large together (4 MB limit). Upload fewer at a time." };
-  return { images, files };
-}
-
 async function overlapFor(clientId: string, batch: unknown): Promise<UploadOverlap | null> {
   if (isDemoMode()) return null;
   const supabase = await createClient();
@@ -96,7 +70,7 @@ export async function readScreenshotUpload(slug: string, _prev: ScreenshotReadSt
   }
   const entered = readPeriod(form);
   if (entered === "invalid") return { status: "error", message: "Enter a valid start and end date, with the end on or after the start." };
-  const imgs = await readImages(form);
+  const imgs = await resolveFiles(form, auth.client.id);
   if ("error" in imgs) return { status: "error", message: imgs.error };
 
   let extraction;
@@ -170,40 +144,28 @@ export async function saveScreenshotUpload(
   }
   const result = buildScreenshotResult(reviewed);
   if (!result.ok) return { status: "error", message: result.errors.join(" ") };
-  const imgs = await readImages(form);
+  const imgs = await resolveFiles(form, auth.client.id);
   if ("error" in imgs) return { status: "error", message: imgs.error };
+  if (!imgs.folder) return { status: "error", message: "The uploaded files could not be found. Add them again." };
 
-  // Keep the files with the upload, as evidence for every value.
+  // The files are already in Storage (uploaded from the browser); they stay
+  // with the upload as evidence for every value.
   const supabase = await createClient();
   const uploadId = crypto.randomUUID();
-  const folder = `${auth.client.id}/${uploadId}`;
-  const stored: string[] = [];
-  for (const [i, f] of imgs.files.entries()) {
-    const path = `${folder}/${i + 1}-${f.name.replace(/[^\w.\-]+/g, "_").slice(-100)}`;
-    const { error } = await supabase.storage.from("uploads").upload(path, f, { contentType: f.type, upsert: false });
-    if (error) {
-      if (stored.length) await supabase.storage.from("uploads").remove(stored);
-      return { status: "error", message: `Could not store the files: ${error.message}` };
-    }
-    stored.push(path);
-  }
-
+  const folder = imgs.folder;
   const { data, error } = await supabase.rpc("commit_upload", {
     p_upload_id: uploadId,
     p_client_id: auth.client.id,
     p_source: reviewed.platform,
     p_kind: "file",
-    p_file_name: imgs.files.map((f) => f.name).join(", ").slice(0, 500),
+    p_file_name: imgs.names.join(", ").slice(0, 500),
     p_storage_path: folder,
     p_parser: "screenshot",
     p_period_start: reviewed.period.start,
     p_period_end: reviewed.period.end,
     p_batch: result.batch,
   });
-  if (error) {
-    await supabase.storage.from("uploads").remove(stored);
-    return { status: "error", message: `Nothing was saved. ${error.message}` };
-  }
+  if (error) return { status: "error", message: `Nothing was saved. ${error.message}` };
   refresh();
   const res = data as { inserted: number; updated: number };
   return { status: "done", inserted: res.inserted, updated: res.updated };

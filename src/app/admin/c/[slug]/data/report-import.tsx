@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { Button, Field, Notice, inputClass } from "@/components/form";
-import { COMPETITOR_LABELS } from "@/lib/ingest/screenshot";
+import { COMPETITOR_LABELS, MAX_FILE_BYTES, MAX_SCREENSHOT_BYTES } from "@/lib/ingest/screenshot";
+import { stageFiles } from "@/lib/ingest/stage-client";
+import type { StagedFile } from "@/lib/ingest/staging";
 import { formatValue } from "@/lib/metrics/format";
 import { METRICS } from "@/lib/metrics/config";
 import { SOURCE_LABELS } from "@/lib/metrics/types";
@@ -18,8 +20,38 @@ const DIMENSIONS: Record<string, string> = { channel: "by channel", landing_page
  * section, the numbers are shown grouped by platform for checking, and save
  * files each platform's numbers under the report's month.
  */
-export function ReportImport({ slug, clientName }: { slug: string; clientName: string }) {
-  const [file, setFile] = useState<File | null>(null);
+export function ReportImport({ slug, clientId, clientName, demo }: { slug: string; clientId: string; clientName: string; demo: boolean }) {
+  const [file, setFileState] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const staged = useRef<StagedFile | null>(null);
+  const maxBytes = demo ? MAX_SCREENSHOT_BYTES : MAX_FILE_BYTES;
+  const setFile = (f: File | null) => {
+    setFileError(f && f.size > maxBytes ? `${f.name} is over ${Math.round(maxBytes / 1_000_000)} MB. Export a smaller PDF, or import the website and social pages separately.` : null);
+    setFileState(f && f.size <= maxBytes ? f : null);
+    staged.current = null;
+  };
+
+  /** The report for the server: a link to the staged copy (normally), or the file itself (demo). */
+  async function fileForm(): Promise<FormData> {
+    const fd = new FormData();
+    if (!file) return fd;
+    if (demo) {
+      fd.append("images", file);
+      return fd;
+    }
+    if (!staged.current) {
+      setUploading(true);
+      try {
+        const done = await stageFiles(clientId, crypto.randomUUID(), [{ id: "report", file }]);
+        staged.current = done.get("report")!;
+      } finally {
+        setUploading(false);
+      }
+    }
+    fd.set("staged", JSON.stringify([staged.current]));
+    return fd;
+  }
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [state, readAction, reading] = useActionState<ReportReadState, FormData>(readReportUpload.bind(null, slug), { status: "idle" });
@@ -28,10 +60,15 @@ export function ReportImport({ slug, clientName }: { slug: string; clientName: s
   const [saved, setSaved] = useState<Extract<ReportSaveResult, { status: "done" }> | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  function read() {
+  async function read() {
     if (!file) return;
-    const fd = new FormData();
-    fd.append("images", file);
+    let fd: FormData;
+    try {
+      fd = await fileForm();
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : "The report could not be uploaded.");
+      return;
+    }
     if (periodStart || periodEnd) {
       fd.set("periodStart", periodStart);
       fd.set("periodEnd", periodEnd);
@@ -44,7 +81,7 @@ export function ReportImport({ slug, clientName }: { slug: string; clientName: s
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[360px_1fr]">
       <div className="space-y-5 self-start rounded-xl border border-line bg-surface p-5">
-        <Field label="Report file" htmlFor="report-file" hint="A complete monthly report as a PDF, up to 3.5 MB.">
+        <Field label="Report file" htmlFor="report-file" hint={`A complete monthly report as a PDF, up to ${Math.round(maxBytes / 1_000_000)} MB and about 100 pages.`}>
           <label
             htmlFor="report-file"
             onDragOver={(e) => e.preventDefault()}
@@ -77,8 +114,9 @@ export function ReportImport({ slug, clientName }: { slug: string; clientName: s
             <input aria-label="End date" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className={inputClass} />
           </div>
         </fieldset>
-        <Button type="button" onClick={read} disabled={reading || saving || !file} className="w-full">
-          {reading ? "Reading the report..." : "Read report"}
+        {fileError && <p className="text-sm text-negative">{fileError}</p>}
+        <Button type="button" onClick={read} disabled={uploading || reading || saving || !file} className="w-full">
+          {uploading ? "Uploading..." : reading ? "Reading the report..." : "Read report"}
         </Button>
         <p className="text-xs text-fg-muted">AI reads every section; you check the numbers before anything is saved.</p>
       </div>
@@ -112,12 +150,17 @@ export function ReportImport({ slug, clientName }: { slug: string; clientName: s
             saving={saving}
             saveError={saveError}
             onSave={(reviewed, importCommentary) => {
-              const fd = new FormData();
-              if (file) fd.append("images", file);
-              fd.set("reviewed", JSON.stringify(reviewed));
-              if (importCommentary) fd.set("importCommentary", "1");
               setSaveError(null);
               startSave(async () => {
+                let fd: FormData;
+                try {
+                  fd = await fileForm();
+                } catch (e) {
+                  setSaveError(e instanceof Error ? e.message : "The report could not be uploaded.");
+                  return;
+                }
+                fd.set("reviewed", JSON.stringify(reviewed));
+                if (importCommentary) fd.set("importCommentary", "1");
                 const res = await saveReportUpload(slug, fd);
                 if (res.status === "done") setSaved(res);
                 else setSaveError(res.message);

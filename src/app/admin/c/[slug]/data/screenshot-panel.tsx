@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Button, Field, Notice, inputClass } from "@/components/form";
 import { formatValue } from "@/lib/metrics/format";
 import { METRICS } from "@/lib/metrics/config";
-import { COMPETITOR_LABELS, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type CompetitorMetric, type ScreenshotPlatform } from "@/lib/ingest/screenshot";
+import { stageFiles } from "@/lib/ingest/stage-client";
+import { COMPETITOR_LABELS, MAX_FILE_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, type CompetitorMetric, type ScreenshotPlatform } from "@/lib/ingest/screenshot";
+import type { StagedFile } from "@/lib/ingest/staging";
 import type { BreakdownType } from "@/lib/ingest/types";
 import { readScreenshotUpload, saveScreenshotUpload, type ScreenshotReadState } from "./screenshot-actions";
 
@@ -108,15 +110,22 @@ interface BRow {
 
 export function ScreenshotPanel({
   slug,
+  clientId,
   clientName,
   configured,
   enabled,
+  demo,
 }: {
   slug: string;
+  clientId: string;
   clientName: string;
   configured: boolean;
   enabled: string[];
+  demo: boolean;
 }) {
+  // Demo mode sends files through the server, so it keeps the small limits.
+  const maxFiles = demo ? 5 : MAX_SCREENSHOTS;
+  const maxPdfBytes = demo ? MAX_SCREENSHOT_BYTES : MAX_FILE_BYTES;
   const platforms = PLATFORMS.filter((p) => enabled.includes(p.value));
   const [platform, setPlatform] = useState<ScreenshotPlatform>(platforms[0]?.value ?? "meta_facebook");
   const [shots, setShots] = useState<Shot[]>([]);
@@ -128,16 +137,20 @@ export function ScreenshotPanel({
   const [saved, setSaved] = useState<{ inserted: number; updated: number } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [prepError, setPrepError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  // Files go to Storage once per batch; re-reading reuses them.
+  const batchId = useRef(crypto.randomUUID());
+  const staged = useRef(new Map<string, StagedFile>());
 
   async function addFiles(files: File[]) {
     setPrepError(null);
     const usable = files.filter((f) => f.type.startsWith("image/") || isPdf(f));
     if (usable.length < files.length) setPrepError("Only screenshots and PDFs can be added here. Use the Upload a file tab for CSV and Excel exports.");
-    const tooBig = usable.filter((f) => isPdf(f) && f.size > MAX_SCREENSHOT_BYTES);
-    if (tooBig.length) setPrepError(`${tooBig[0].name} is over 3.5 MB. Save only the pages with the numbers, or export a smaller PDF.`);
+    const tooBig = usable.filter((f) => isPdf(f) && f.size > maxPdfBytes);
+    if (tooBig.length) setPrepError(`${tooBig[0].name} is over ${Math.round(maxPdfBytes / 1_000_000)} MB. Export a smaller PDF or only the pages with the numbers.`);
     const accepted = usable.filter((f) => !tooBig.includes(f));
-    const room = MAX_SCREENSHOTS - shots.length;
-    if (accepted.length > room) setPrepError(`Up to ${MAX_SCREENSHOTS} files at a time.`);
+    const room = maxFiles - shots.length;
+    if (accepted.length > room) setPrepError(`Up to ${maxFiles} files at a time.`);
     try {
       const prepared = await Promise.all(accepted.slice(0, Math.max(0, room)).map(prepare));
       setShots((s) => [...s, ...prepared.map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }))]);
@@ -159,26 +172,49 @@ export function ScreenshotPanel({
     return () => window.removeEventListener("paste", onPaste);
   });
 
-  function imagesForm(): FormData {
+  /** The files for the server: links to the staged copies (normally), or the files themselves (demo). */
+  async function filesForm(): Promise<FormData> {
     const fd = new FormData();
-    for (const s of shots) fd.append("images", s.file);
+    if (demo) {
+      for (const s of shots) fd.append("images", s.file);
+      return fd;
+    }
+    const todo = shots.filter((s) => !staged.current.has(s.id));
+    if (todo.length) {
+      setUploading(true);
+      try {
+        const done = await stageFiles(clientId, batchId.current, todo);
+        done.forEach((v, k) => staged.current.set(k, v));
+      } finally {
+        setUploading(false);
+      }
+    }
+    fd.set("staged", JSON.stringify(shots.map((s) => staged.current.get(s.id)!)));
     return fd;
   }
 
-  function read() {
-    const fd = imagesForm();
+  async function read() {
+    setSaved(null);
+    setSaveError(null);
+    setPrepError(null);
+    let fd: FormData;
+    try {
+      fd = await filesForm();
+    } catch (e) {
+      setPrepError(e instanceof Error ? e.message : "The files could not be uploaded.");
+      return;
+    }
     fd.set("platform", platform);
     if (periodStart || periodEnd) {
       fd.set("periodStart", periodStart);
       fd.set("periodEnd", periodEnd);
     }
-    setSaved(null);
-    setSaveError(null);
     startRead(() => readAction(fd));
   }
 
   function removeShot(id: string) {
     setShots((s) => s.filter((x) => x.id !== id));
+    staged.current.delete(id);
   }
 
   if (!platforms.length) {
@@ -207,7 +243,7 @@ export function ScreenshotPanel({
           </select>
         </Field>
 
-        <Field label={`Screenshots or PDFs (${shots.length}/${MAX_SCREENSHOTS})`} htmlFor="shot-files" hint="Drop files here, choose them, or paste screenshots with Ctrl+V / Cmd+V.">
+        <Field label={`Screenshots or PDFs (${shots.length}/${maxFiles})`} htmlFor="shot-files" hint="Drop files here, choose them, or paste screenshots with Ctrl+V / Cmd+V.">
           <label
             htmlFor="shot-files"
             onDragOver={(e) => e.preventDefault()}
@@ -270,8 +306,8 @@ export function ScreenshotPanel({
           </div>
         </fieldset>
 
-        <Button type="button" onClick={read} disabled={reading || saving || shots.length === 0} className="w-full">
-          {reading ? "Reading..." : "Read numbers"}
+        <Button type="button" onClick={read} disabled={uploading || reading || saving || shots.length === 0} className="w-full">
+          {uploading ? "Uploading..." : reading ? "Reading..." : "Read numbers"}
         </Button>
         <p className="text-xs text-fg-muted">AI reads the numbers; you check every value before anything is saved.</p>
       </div>
@@ -284,8 +320,8 @@ export function ScreenshotPanel({
               <li>Set the date range in the platform first, and keep the dates visible in the screenshot.</li>
               <li>Hover off charts so tooltips do not cover numbers.</li>
               <li>Exact numbers beat rounded ones (21,239 rather than 21.2K). Open the detail view when the platform rounds.</li>
-              <li>PDFs work too: a GA4 or Meta report export, or a platform page saved as PDF. Keep them under 3.5 MB.</li>
-              <li>One platform per batch. Up to {MAX_SCREENSHOTS} files at a time.</li>
+              <li>PDFs work too: a GA4 or Meta report export, or a platform page saved as PDF, up to {Math.round(maxPdfBytes / 1_000_000)} MB each.</li>
+              <li>One platform per batch. Up to {maxFiles} files at a time.</li>
             </ul>
           </div>
         )}
@@ -305,14 +341,23 @@ export function ScreenshotPanel({
             saving={saving}
             saveError={saveError}
             onSave={(reviewed) => {
-              const fd = imagesForm();
-              fd.set("reviewed", JSON.stringify(reviewed));
               setSaveError(null);
               startSave(async () => {
+                let fd: FormData;
+                try {
+                  fd = await filesForm();
+                } catch (e) {
+                  setSaveError(e instanceof Error ? e.message : "The files could not be uploaded.");
+                  return;
+                }
+                fd.set("reviewed", JSON.stringify(reviewed));
                 const res = await saveScreenshotUpload(slug, fd);
                 if (res.status === "done") {
                   setSaved(res);
                   setShots([]);
+                  // The next batch gets its own folder.
+                  batchId.current = crypto.randomUUID();
+                  staged.current = new Map();
                 } else setSaveError(res.message);
               });
             }}

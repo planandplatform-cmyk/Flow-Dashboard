@@ -91,10 +91,17 @@ async function DataPageContent(props: PageProps<"/admin/c/[slug]/data">) {
 
         <div className="mt-8">
           {tab === "upload" && <UploadPanel slug={client.slug} clientName={client.name} sources={sources} />}
-          {tab === "screenshots" && <ScreenshotPanel slug={client.slug} clientName={client.name} configured={screenshotReadingConfigured()} enabled={client.enabled_sources} />}
+          {tab === "screenshots" && <ScreenshotPanel
+              slug={client.slug}
+              clientId={client.id}
+              clientName={client.name}
+              configured={screenshotReadingConfigured()}
+              enabled={client.enabled_sources}
+              demo={viewer.demo}
+            />}
           {tab === "report" &&
             (screenshotReadingConfigured() ? (
-              <ReportImport slug={client.slug} clientName={client.name} />
+              <ReportImport slug={client.slug} clientId={client.id} clientName={client.name} demo={viewer.demo} />
             ) : (
               <Notice tone="info" title="Report reading is not set up yet">
                 Add an Anthropic API key as ANTHROPIC_API_KEY in the Vercel environment variables, then redeploy.

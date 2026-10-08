@@ -1086,3 +1086,10 @@ $$;
 -- Share of views by content type (Facebook Insights: Reels 76.3%, Photos 22.6%...).
 -- Instagram gives absolute counts per content type, stored as metrics instead.
 alter type public.breakdown_type add value if not exists 'format_views';
+
+-- ====================================================================
+-- 20261011000001_bigger_uploads.sql
+-- ====================================================================
+-- Screenshots and report PDFs now go straight from the browser to Storage
+-- (not through the app server), so files can be larger: 25 MB each.
+update storage.buckets set file_size_limit = 26214400 where id = 'uploads';
