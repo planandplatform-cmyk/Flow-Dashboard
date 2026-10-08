@@ -347,6 +347,14 @@ begin
   exception when insufficient_privilege then null;
   end;
 
+  -- Connecting GA4 in Settings: admins set the property ID and status.
+  update public.connections set external_account_id = '412345678', status = 'active'
+   where client_id = '00000000-0000-4000-b000-00000000000a' and source = 'ga4';
+  if (select external_account_id from public.connections
+       where client_id = '00000000-0000-4000-b000-00000000000a' and source = 'ga4') is distinct from '412345678' then
+    raise exception 'FAIL: admin could not connect GA4';
+  end if;
+
   insert into public.clients (name, slug) values ('Admin Made', 'rls-admin-made');
   insert into public.user_clients (user_id, client_id)
   values ('00000000-0000-4000-a000-0000000000a1', '00000000-0000-4000-b000-00000000000b');

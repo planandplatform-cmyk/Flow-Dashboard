@@ -48,9 +48,12 @@ export async function connectGa4(slug: string, _prev: SyncState, form: FormData)
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("connections")
-    .upsert({ client_id: auth.clientId, source: "ga4", external_account_id: propertyId, status: "active" }, { onConflict: "client_id,source" });
+  // Update or insert, not upsert: an upsert also rewrites client_id and
+  // source, which row-level grants keep fixed.
+  const { data: existing } = await supabase.from("connections").select("id").eq("client_id", auth.clientId).eq("source", "ga4").maybeSingle();
+  const { error } = existing
+    ? await supabase.from("connections").update({ external_account_id: propertyId, status: "active" }).eq("id", existing.id)
+    : await supabase.from("connections").insert({ client_id: auth.clientId, source: "ga4", external_account_id: propertyId, status: "active" });
   if (error) return { status: "error", message: `Not saved. ${error.message}` };
   await auditAction(auth.clientId, "connection.connect", { source: "ga4", property_id: propertyId });
 
