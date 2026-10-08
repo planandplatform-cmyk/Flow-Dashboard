@@ -66,6 +66,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     social,
     channelTrends,
     socialGrowth,
+    adsTrends,
     hasWebsite,
     websiteTiles,
     salesTiles,
@@ -558,6 +559,22 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 caption={`${daysBetween(adsRange)} days of activity`}
               />
             </div>
+            {/* Spend in the selected calendar month, and month by month. */}
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <KpiTile
+                metricKey="ads_spend"
+                label={`Spend in ${period.label}`}
+                value={val("ads_spend")}
+                comparison={mom("ads_spend")}
+                caption={period.month ? "Calendar month" : "Selected dates"}
+              />
+              <KpiTile metricKey="ads_leads" label={`Leads in ${period.label}`} value={val("ads_leads")} comparison={mom("ads_leads")} caption={period.month ? "Calendar month" : "Selected dates"} />
+            </div>
+            {adsTrends.length > 0 && (
+              <div className="mt-6">
+                <ChannelTrendChart series={adsTrends} color="var(--color-teal)" channel="Meta Ads" />
+              </div>
+            )}
             <div className="mt-6">
               <DataTable
                 caption="Meta ad metrics explained"

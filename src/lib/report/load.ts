@@ -392,6 +392,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
           today,
         )
       : [];
+  // Meta Ads by calendar month: spend (first), leads and cost per lead over 12 months.
+  const adsTrends = enabled.has("meta_ads") ? buildTrends(trendResolver, ["ads_spend", "ads_leads", "ads_cpl"], months, today) : [];
   const trends = buildTrends(trendResolver, trendKeys, months, today, (k) => {
     const def = METRICS[k];
     return def.source === "combined" ? def.label : `${SOURCE_LABELS[def.source]} ${def.label}`;
@@ -474,6 +476,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     social,
     channelTrends,
     socialGrowth,
+    adsTrends,
     hasWebsite,
     websiteTiles,
     salesTiles,

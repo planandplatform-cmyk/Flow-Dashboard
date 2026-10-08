@@ -461,6 +461,21 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
               <Kpi s={s} t={t} metricKey="ads_reach" label="Total Reach" value={val("ads_reach", r.adsRange)} comparison={r.adsCmp("ads_reach")} caption="Different people reached" />
               <Kpi s={s} t={t} metricKey="ads_spend" value={val("ads_spend", r.adsRange)} comparison={r.adsCmp("ads_spend")} caption={`${daysBetween(r.adsRange)} days of activity`} />
             </View>
+            <View style={[s.row, { marginTop: 8 }]} wrap={false}>
+              <Kpi s={s} t={t} metricKey="ads_spend" label={`Spend in ${period.label}`} value={val("ads_spend")} comparison={mom("ads_spend")} caption={period.month ? "Calendar month" : "Selected dates"} />
+              <Kpi s={s} t={t} metricKey="ads_leads" label={`Leads in ${period.label}`} value={val("ads_leads")} comparison={mom("ads_leads")} caption={period.month ? "Calendar month" : "Selected dates"} />
+            </View>
+            {r.adsTrends.find((x) => x.key === "ads_spend") && (
+              <View style={{ flexDirection: "row", marginTop: 8 }} wrap={false}>
+                <TrendChart
+                  s={s}
+                  t={t}
+                  series={{ ...r.adsTrends.find((x) => x.key === "ads_spend")!, label: "Monthly ad spend" }}
+                  eventMonths={new Set()}
+                  width={480}
+                />
+              </View>
+            )}
             <View style={{ marginTop: 8 }} wrap={false}>
               <Table
                 s={s}
@@ -948,8 +963,8 @@ function axis(v: number, format: TrendSeries["format"]) {
 }
 
 /** A small line chart: these months solid, a year earlier dashed, events dotted. */
-function TrendChart({ s, t, series, eventMonths }: { s: S; t: PdfTheme; series: TrendSeries; eventMonths: Set<string> }) {
-  const W = 240;
+function TrendChart({ s, t, series, eventMonths, width = 240 }: { s: S; t: PdfTheme; series: TrendSeries; eventMonths: Set<string>; width?: number }) {
+  const W = width;
   const H = 70;
   const pts = series.points;
   const all = pts.flatMap((p) => [p.value, p.previous]).filter((v): v is number => v !== null);
