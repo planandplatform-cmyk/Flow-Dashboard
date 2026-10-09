@@ -57,7 +57,7 @@ async function LoginBody({ searchParams }: { searchParams: PageProps<"/login">["
         </p>
       )}
       <div className="mt-8">
-        <LoginForm next={next} demo={demo} />
+        <LoginForm next={next} demo={demo} siteUrl={process.env.SITE_URL?.trim().replace(/\/$/, "") || undefined} />
       </div>
     </>
   );

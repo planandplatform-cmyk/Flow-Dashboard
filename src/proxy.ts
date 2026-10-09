@@ -10,7 +10,29 @@ const PUBLIC_PATHS = ["/login", "/auth/", "/api/cron/"];
  * visitors to the login page. This is a convenience redirect only: data access
  * is enforced by row-level security in the database.
  */
+/**
+ * In production, any address other than SITE_URL (the long deployment links,
+ * the team address) is sent to SITE_URL. Those addresses sit behind Vercel's
+ * login, so links built on them fail for clients and on phones.
+ */
+export function canonicalRedirect(request: NextRequest): NextResponse | null {
+  if (process.env.VERCEL_ENV !== "production" || !process.env.SITE_URL) return null;
+  // Scheduled jobs call the deployment directly; leave API routes alone.
+  if (request.nextUrl.pathname.startsWith("/api/")) return null;
+  let site: URL;
+  try {
+    site = new URL(process.env.SITE_URL.trim());
+  } catch {
+    return null;
+  }
+  const host = request.headers.get("x-forwarded-host") ?? request.nextUrl.host;
+  if (!host || host === site.host) return null;
+  return NextResponse.redirect(new URL(request.nextUrl.pathname + request.nextUrl.search, site.origin), 308);
+}
+
 export async function proxy(request: NextRequest) {
+  const canonical = canonicalRedirect(request);
+  if (canonical) return canonical;
   if (isDemoMode()) return NextResponse.next();
   if (!isSupabaseConfigured()) {
     // Shown instead of a bare 500 so a settings typo is easy to spot. Says

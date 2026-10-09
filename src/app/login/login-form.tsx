@@ -5,7 +5,13 @@ import { createClient } from "@/lib/supabase/client";
 
 type State = { kind: "idle" } | { kind: "sending" } | { kind: "sent"; email: string } | { kind: "error"; message: string };
 
-export function LoginForm({ next, demo }: { next?: string; demo: boolean }) {
+/**
+ * siteUrl is the portal's public address (SITE_URL). Sign-in links always go
+ * there, never to the address the form happened to be opened on: preview and
+ * deployment addresses sit behind Vercel's login, which blocks clients and
+ * phones that are not signed in to Vercel.
+ */
+export function LoginForm({ next, demo, siteUrl }: { next?: string; demo: boolean; siteUrl?: string }) {
   const [state, setState] = useState<State>({ kind: "idle" });
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -18,7 +24,7 @@ export function LoginForm({ next, demo }: { next?: string; demo: boolean }) {
     }
 
     setState({ kind: "sending" });
-    const redirect = new URL("/auth/confirm", window.location.origin);
+    const redirect = new URL("/auth/confirm", siteUrl ?? window.location.origin);
     if (next) redirect.searchParams.set("next", next);
 
     const { error } = await createClient().auth.signInWithOtp({
