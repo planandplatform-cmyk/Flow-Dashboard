@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { normalizeEmail, parseClientForm, type FieldErrors } from "@/lib/clients/form";
 import { getAdminViewer, getClientSettings, siteUrl } from "@/lib/data/admin";
 import type { UserRole } from "@/lib/data/portal";
+import { sendLinkOrInvite } from "@/lib/auth/links";
 import { adminApiConfigured, createAuthAdminClient } from "@/lib/supabase/admin";
 import { isDemoMode } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -155,15 +156,15 @@ export async function sendSignInLink(next: string, email: string): Promise<FormS
   if (!(await getAdminViewer())) return NOT_ADMIN;
   const clean = normalizeEmail(email);
   if (!clean) return { status: "error", message: "Invalid email." };
-  const supabase = await createClient();
-  // signInWithOtp on the server sends the email without touching the admin's own session.
-  const { error } = await supabase.auth.signInWithOtp({
-    email: clean,
-    options: { shouldCreateUser: false, emailRedirectTo: `${await siteUrl()}/auth/confirm?next=${encodeURIComponent(next)}` },
-  });
-  if (error) return { status: "error", message: `Could not send the link. ${error.message}` };
-  return { status: "done", message: `Sign-in link sent to ${clean}.` };
+  const result = await sendLinkOrInvite(clean, next);
+  if ("error" in result) return { status: "error", message: `Could not send the link. ${result.error}` };
+  return {
+    status: "done",
+    message: result.reinvited ? `They had not accepted their invite yet, so a new invite was sent to ${clean}.` : `Sign-in link sent to ${clean}.`,
+  };
 }
+
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // FFM team

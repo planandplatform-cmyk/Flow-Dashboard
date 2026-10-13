@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { resendInviteFromLogin } from "./actions";
 
 type State = { kind: "idle" } | { kind: "sending" } | { kind: "sent"; email: string } | { kind: "error"; message: string };
 
@@ -35,6 +36,9 @@ export function LoginForm({ next, demo, siteUrl }: { next?: string; demo: boolea
         emailRedirectTo: redirect.toString(),
       },
     });
+
+    // An invite that was never accepted blocks normal sign-in links; send the invite again.
+    if (error && (error.status === 422 || error.status === 400)) await resendInviteFromLogin(email, next);
 
     // Same message whether or not the address has an account, so the form
     // cannot be used to discover who is a client.
