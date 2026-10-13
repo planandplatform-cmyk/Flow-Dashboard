@@ -68,6 +68,7 @@ export function Members({
                 <div className="mt-1">
                   <StatusBadge m={m} />
                 </div>
+                {m.otherClients && m.otherClients.length > 0 && <p className="mt-1 text-xs text-fg-muted">Also sees: {m.otherClients.join(", ")}</p>}
               </div>
               {roles && changeRole && (
                 <select

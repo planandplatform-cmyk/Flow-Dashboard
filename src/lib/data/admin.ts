@@ -13,6 +13,8 @@ export interface Member {
   /** null when sign-in status is unknown (secret key not configured). */
   status: "active" | "invited" | null;
   last_sign_in_at: string | null;
+  /** Other clients this person can also see (client logins only). */
+  otherClients?: string[];
 }
 
 export interface ClientSettings {
@@ -80,7 +82,20 @@ export async function listClientMembers(clientId: string): Promise<Member[]> {
     .map((r) => r.user as unknown as Omit<Member, "status" | "last_sign_in_at"> | null)
     .filter((u): u is Omit<Member, "status" | "last_sign_in_at"> => Boolean(u))
     .sort((a, b) => a.email.localeCompare(b.email));
-  return withSignInStatus(users);
+  // Which other clients each person can see, so shared logins are obvious.
+  const others = new Map<string, string[]>();
+  if (users.length) {
+    const { data: rows } = await supabase
+      .from("user_clients")
+      .select("user_id, client:clients(name)")
+      .in("user_id", users.map((u) => u.id))
+      .neq("client_id", clientId);
+    for (const r of rows ?? []) {
+      const name = (r.client as unknown as { name: string } | null)?.name;
+      if (name) others.set(r.user_id as string, [...(others.get(r.user_id as string) ?? []), name]);
+    }
+  }
+  return (await withSignInStatus(users)).map((m) => ({ ...m, otherClients: (others.get(m.id) ?? []).sort() }));
 }
 
 /** Flow Forward Media staff and admins. */

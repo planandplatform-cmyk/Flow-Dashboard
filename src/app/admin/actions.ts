@@ -124,6 +124,10 @@ export async function inviteClientUser(slug: string, _prev: FormState, form: For
   }
 
   const supabase = await createClient();
+  const { data: already } = await supabase.from("user_clients").select("user_id").eq("user_id", user.id).eq("client_id", client.id).maybeSingle();
+  if (already) {
+    return { status: "done", message: `${email} already has access to ${client.name}. To send them a new email, use Resend link next to their name.` };
+  }
   const { error } = await supabase.from("user_clients").upsert({ user_id: user.id, client_id: client.id }, { ignoreDuplicates: true });
   if (error) return { status: "error", message: `Could not give access. ${error.message}` };
   await audit(client.id, "client.user_added", { email, invited: user.invited });
@@ -132,7 +136,7 @@ export async function inviteClientUser(slug: string, _prev: FormState, form: For
     status: "done",
     message: user.invited
       ? `Invite sent to ${email}. They can sign in from the link in the email.`
-      : `${email} already had a login and can now see ${client.name} too.`,
+      : `${email} already had a login (for another client) and can now see ${client.name} too.`,
   };
 }
 
