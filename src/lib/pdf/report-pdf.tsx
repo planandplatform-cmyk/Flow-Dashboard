@@ -238,6 +238,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                 ["Sessions by channel", "Channel", r.websiteChannels],
                 ["Views by page", "Page", r.websitePages],
                 ["Sessions by source", "Source", r.websiteSources],
+                ["Top cities by engaged sessions", "City", r.websiteCities],
               ] as const
             )
               .filter(([, , table]) => table.rows.length > 0)

@@ -19,12 +19,10 @@ describe("GA4 reports", () => {
       "userGender",
       "deviceCategory",
       "country",
-      "city",
       "userAgeBracket",
       "userGender",
       "deviceCategory",
       "country",
-      "city",
     ]);
     const months = reqs.filter((r) => r.id === "month-users").map((r) => r.period);
     expect(months).toEqual([
@@ -119,6 +117,26 @@ describe("GA4 traffic sources", () => {
   });
 });
 
+describe("GA4 cities", () => {
+  it("ranks cities by engaged sessions and stores them as city rows", () => {
+    const reqs = ga4Requests({ start: "2026-09-01", end: "2026-09-30" });
+    const city = reqs.find((r) => r.id === "month-city")!;
+    expect(city.body.orderBys).toEqual([{ metric: { metricName: "engagedSessions" }, desc: true }]);
+    const out = mapGa4Report(city, {
+      dimensionHeaders: [{ name: "city" }],
+      metricHeaders: [{ name: "engagedSessions" }, { name: "sessions" }],
+      rows: [
+        { dimensionValues: [{ value: "Boise" }], metricValues: [{ value: "120" }, { value: "180" }] },
+        { dimensionValues: [{ value: "(not set)" }], metricValues: [{ value: "40" }, { value: "90" }] },
+      ],
+    });
+    expect(out.period.map((r) => [r.metric_key, r.dimension, r.dimension_value, r.value])).toEqual([
+      ["ga4_engaged_sessions", "city", "Boise", 120],
+      ["ga4_sessions", "city", "Boise", 180],
+    ]);
+  });
+});
+
 describe("GA4 visitor demographics", () => {
   it("stores shares of known visitors per month, top groups only", () => {
     const reqs = ga4Requests({ start: "2026-09-01", end: "2026-09-30" });
@@ -136,14 +154,14 @@ describe("GA4 visitor demographics", () => {
       { platform: "ga4", snapshot_date: "2026-09-30", period_start: "2026-09-01", breakdown_type: "gender", bucket: "Male", share: 0.6 },
       { platform: "ga4", snapshot_date: "2026-09-30", period_start: "2026-09-01", breakdown_type: "gender", bucket: "Female", share: 0.4 },
     ]);
-    const cities = reqs.find((r) => r.id === "month-demo-city")!;
-    const many = mapGa4Report(cities, {
-      dimensionHeaders: [{ name: "city" }],
+    const countries = reqs.find((r) => r.id === "month-demo-country")!;
+    const many = mapGa4Report(countries, {
+      dimensionHeaders: [{ name: "country" }],
       metricHeaders: [{ name: "totalUsers" }],
       rows: Array.from({ length: 15 }, (_, i) => ({ dimensionValues: [{ value: `City ${i}` }], metricValues: [{ value: String(15 - i) }] })),
     });
     expect(many.snapshots).toHaveLength(10);
-    expect(many.snapshots[0]).toMatchObject({ breakdown_type: "city", bucket: "City 0", share: Math.round((15 / 120) * 10000) / 10000 });
+    expect(many.snapshots[0]).toMatchObject({ breakdown_type: "country", bucket: "City 0", share: Math.round((15 / 120) * 10000) / 10000 });
   });
 });
 

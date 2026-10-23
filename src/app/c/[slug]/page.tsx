@@ -77,6 +77,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     websiteChannels,
     websitePages,
     websiteSources,
+    websiteCities,
     websiteAudience,
     hasSearch,
     searchQueries,
@@ -364,6 +365,19 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 </div>
               ))}
             </div>
+            {websiteCities.rows.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Top cities by engaged sessions</h3>
+                <DataTable
+                  caption="Top cities by engaged sessions"
+                  columns={[
+                    { label: "City" },
+                    ...websiteCities.keys.map((k) => ({ label: <MetricLabel metricKey={k} label={WEBSITE_COLUMNS[k]} />, align: "right" as const })),
+                  ]}
+                  rows={websiteCities.rows.map((row, i) => [`${i + 1}. ${row.name}`, ...row.values.map((v, j) => formatMetric(websiteCities.keys[j], v))])}
+                />
+              </div>
+            )}
             {websiteSources.rows.length > 0 && (
               <div className="mt-6">
                 <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Sessions by source</h3>

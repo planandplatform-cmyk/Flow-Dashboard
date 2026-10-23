@@ -5,8 +5,8 @@
  * Daily: totals and sessions by channel, so any date range is exact.
  * Monthly: visitors (unique, so only correct for the exact month), visitors
  * by channel, the top landing pages and pages, which would be too many
- * rows by day, and who the visitors were (age, gender, device, country,
- * city) as each group's share of visitors.
+ * rows by day, top cities ranked by engaged sessions, and who the visitors
+ * were (age, gender, device, country) as each group's share of visitors.
  */
 import type { BreakdownType, DailyIn, PeriodIn, SnapshotIn } from "@/lib/ingest/types";
 import { monthRange, monthsBetween } from "@/lib/dates";
@@ -105,6 +105,18 @@ export function ga4Requests(range: DateRange): Ga4ReportRequest[] {
           orderBys: by("sessions"),
         },
       },
+      // Cities ranked by engaged sessions, with the measures to compare them.
+      {
+        id: "month-city",
+        period,
+        body: {
+          dateRanges: dr(period),
+          dimensions: m("city"),
+          metrics: m("engagedSessions", "sessions", "keyEvents", "totalUsers", "userEngagementDuration"),
+          limit: 25,
+          orderBys: by("engagedSessions"),
+        },
+      },
       // Exact traffic sources (google, m.facebook.com, chatgpt.com, a newsletter's utm_source...).
       {
         id: "month-source",
@@ -144,7 +156,6 @@ export const DEMOGRAPHICS: { dimension: string; type: BreakdownType; keep: numbe
   { dimension: "userGender", type: "gender", keep: 5 },
   { dimension: "deviceCategory", type: "device", keep: 5 },
   { dimension: "country", type: "country", keep: 10 },
-  { dimension: "city", type: "city", keep: 10 },
 ];
 export const GA4_SNAPSHOT_TYPES = DEMOGRAPHICS.map((d) => d.type);
 
@@ -188,6 +199,7 @@ export function mapGa4Report(req: Ga4ReportRequest, res: Ga4ReportResponse): { d
     let dimensionValue = "";
     if (d.sessionDefaultChannelGroup !== undefined) [dimension, dimensionValue] = ["channel", d.sessionDefaultChannelGroup];
     if (d.landingPage !== undefined) [dimension, dimensionValue] = ["landing_page", d.landingPage];
+    if (d.city !== undefined) [dimension, dimensionValue] = ["city", d.city];
     if (d.sessionSource !== undefined) [dimension, dimensionValue] = ["source", d.sessionSource === "(direct)" ? "Direct" : d.sessionSource];
     if (d.pagePath !== undefined) [dimension, dimensionValue] = ["landing_page", d.pagePath];
     if (dimension && (!dimensionValue || dimensionValue === "(not set)")) continue;

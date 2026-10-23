@@ -116,12 +116,12 @@ export const WEBSITE_AUDIENCE: { type: string; title: string }[] = [
   { type: "gender", title: "Visitors by gender" },
   { type: "device", title: "Visitors by device" },
   { type: "country", title: "Top countries" },
-  { type: "city", title: "Top cities" },
 ];
 
 /** Short column headings for website tables. */
 export const WEBSITE_COLUMNS: Record<string, string> = {
   ga4_sessions: "Sessions",
+  ga4_engaged_sessions: "Engaged Sessions",
   ga4_users: "Users",
   ga4_page_views: "Views",
   ga4_engagement_rate: "Engagement",
@@ -297,6 +297,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
   };
   const websiteChannels = websiteTable("ga4_sessions", "channel", ["ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 10);
   const websiteSources = websiteTable("ga4_sessions", "source", ["ga4_users", "ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 12);
+  // Top cities, ranked by engaged sessions (visits that stayed, browsed, or acted).
+  const websiteCities = websiteTable("ga4_engaged_sessions", "city", ["ga4_sessions", "ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events"], 10);
   const websitePages = websiteTable("ga4_page_views", "landing_page", ["ga4_engagement_rate", "ga4_avg_engagement_time", "ga4_key_events", "ga4_revenue"], 8);
   // Who visited the website (GA4), for the months in this range.
   const websiteAudience = hasWebsite
@@ -495,6 +497,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     websiteChannels,
     websitePages,
     websiteSources,
+    websiteCities,
     websiteAudience,
     hasSearch,
     searchQueries,
