@@ -88,3 +88,25 @@ describe("combined social growth", () => {
     expect(growth.map((g) => g.id)).toEqual(["views"]);
   });
 });
+
+describe("month in progress note", () => {
+  it("explains that a partial month is compared with a whole one", async () => {
+    const { partialPeriodNote } = await import("./period");
+    const note = partialPeriodNote(
+      { start: "2026-10-01", end: "2026-10-31" },
+      { start: "2026-09-01", end: "2026-09-30" },
+      { label: "October 2026", compareLabel: "September 2026", month: true },
+      "2026-10-23",
+    );
+    expect(note).toContain("October 2026 is still in progress (day 23 of 31)");
+    expect(note).toContain("all of September 2026");
+    expect(note).not.toMatch(/—/);
+  });
+
+  it("stays quiet for finished months and when nothing is compared", async () => {
+    const { partialPeriodNote } = await import("./period");
+    const sep = { start: "2026-09-01", end: "2026-09-30" };
+    expect(partialPeriodNote(sep, { start: "2026-08-01", end: "2026-08-31" }, { label: "September 2026", compareLabel: "August 2026", month: true }, "2026-10-23")).toBeNull();
+    expect(partialPeriodNote({ start: "2026-10-01", end: "2026-10-31" }, null, { label: "October 2026", compareLabel: null, month: true }, "2026-10-23")).toBeNull();
+  });
+});

@@ -21,7 +21,7 @@ import { createTimer, type Timer } from "@/lib/timing";
 import { compare, MetricResolver, onlyEnabledSources, type DateRange } from "@/lib/metrics/aggregate";
 import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource, type SocialSource } from "@/lib/metrics/types";
-import { compareWindow, PRESETS, resolvePeriod } from "./period";
+import { compareWindow, partialPeriodNote, PRESETS, resolvePeriod } from "./period";
 import { buildSocial, NOT_AVAILABLE } from "./social";
 import { buildSocialGrowth, buildTrends, metricDependencies, TREND_KEYS, trendFetchRange, trendMonths } from "./trends";
 
@@ -464,9 +464,12 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     ...(hasSearch ? [{ key: "gsc_clicks", caption: "Clicks from unpaid Google results", label: "Google Search Clicks" }] : []),
   ].slice(0, 3) as { key: string; caption: string; label?: string }[];
 
+  // The current month against a whole previous month: say so, so lower totals are not read as a drop.
+  const partialNote = partialPeriodNote(range, compareRange, { label: period.label, compareLabel: period.compareLabel, month: Boolean(period.month) }, today);
   timer.mark("Calculating the report");
   return {
     timings: timer.steps,
+    partialNote,
     client,
     today,
     thisMonth,

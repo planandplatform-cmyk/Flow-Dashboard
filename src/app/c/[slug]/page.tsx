@@ -135,6 +135,12 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
               {period.label === describeRange(range) ? "" : `${describeRange(range)} · `}
               {period.compareLabel ? `Compared with ${period.compareLabel}` : "No comparison"}
             </p>
+            {report.partialNote && (
+              <p className="mt-3 max-w-2xl rounded-lg border border-line bg-surface px-3 py-2 text-xs leading-relaxed text-fg-secondary" role="note">
+                <span className="font-semibold text-fg">{period.month ? "Month in progress. " : "Still in progress. "}</span>
+                {report.partialNote}
+              </p>
+            )}
           </div>
           <div className="flex items-stretch gap-2">
             <PeriodPicker

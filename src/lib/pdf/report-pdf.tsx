@@ -103,6 +103,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
             {period.label === describeRange(range) ? "" : `${describeRange(range)} · `}
             {period.compareLabel ? `Compared with ${period.compareLabel}` : "No comparison"}
           </Text>
+          {r.partialNote && <Text style={{ marginTop: 6, fontSize: 8, color: t.fgSecondary }}>{period.month ? "Month in progress. " : "Still in progress. "}{r.partialNote}</Text>}
         </View>
 
         {/* Executive summary */}

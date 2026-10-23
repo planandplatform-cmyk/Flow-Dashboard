@@ -217,3 +217,22 @@ export function periodQuery(p: {
   }
   return q.toString();
 }
+
+/**
+ * A note for a period that is not over yet (usually the current month)
+ * compared with a complete one: totals will look lower until it ends.
+ * Null when the period is complete or there is no comparison.
+ */
+export function partialPeriodNote(
+  range: { start: string; end: string },
+  compareRange: { start: string; end: string } | null,
+  labels: { label: string; compareLabel: string | null; month: boolean },
+  today: string,
+): string | null {
+  if (!compareRange || range.end < today || today < range.start) return null;
+  const day = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${range.start}T00:00:00Z`)) / 86_400_000) + 1;
+  const total = Math.round((Date.parse(`${range.end}T00:00:00Z`) - Date.parse(`${range.start}T00:00:00Z`)) / 86_400_000) + 1;
+  const against = labels.compareLabel ? `all of ${labels.compareLabel}` : "a complete period";
+  const what = labels.month ? `${labels.label} is still in progress (day ${day} of ${total})` : `These dates are still in progress (day ${day} of ${total})`;
+  return `${what}, and it is compared with ${against}. Totals such as views, visits and leads will usually look lower until it ends. Rates such as engagement rate compare fairly now.`;
+}
