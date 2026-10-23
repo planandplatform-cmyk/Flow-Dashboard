@@ -76,6 +76,7 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     salesTiles,
     websiteChannels,
     websitePages,
+    websiteSources,
     websiteAudience,
     hasSearch,
     searchQueries,
@@ -363,6 +364,20 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 </div>
               ))}
             </div>
+            {websiteSources.rows.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Sessions by source</h3>
+                <DataTable
+                  caption="Website sessions by source"
+                  columns={[
+                    { label: "Source" },
+                    ...websiteSources.keys.map((k) => ({ label: <MetricLabel metricKey={k} label={WEBSITE_COLUMNS[k]} />, align: "right" as const })),
+                  ]}
+                  rows={websiteSources.rows.map((row) => [row.name, ...row.values.map((v, i) => formatMetric(websiteSources.keys[i], v))])}
+                />
+                <p className="mt-2 text-xs text-fg-muted">The exact site or campaign each visit came from, as Google Analytics records it.</p>
+              </div>
+            )}
             {websiteAudience.length > 0 && (
               <div className="mt-6">
                 <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Who visited</h3>

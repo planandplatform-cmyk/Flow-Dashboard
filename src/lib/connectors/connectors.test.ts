@@ -97,6 +97,28 @@ describe("GA4 time and sales", () => {
   });
 });
 
+describe("GA4 traffic sources", () => {
+  it("stores sessions by exact source each month, with direct named plainly", () => {
+    const reqs = ga4Requests({ start: "2026-09-01", end: "2026-09-30" });
+    const source = reqs.find((r) => r.id === "month-source")!;
+    expect(source.body.dimensions).toEqual([{ name: "sessionSource" }]);
+    const out = mapGa4Report(source, {
+      dimensionHeaders: [{ name: "sessionSource" }],
+      metricHeaders: [{ name: "sessions" }, { name: "totalUsers" }],
+      rows: [
+        { dimensionValues: [{ value: "koin" }], metricValues: [{ value: "437" }, { value: "436" }] },
+        { dimensionValues: [{ value: "(direct)" }], metricValues: [{ value: "90" }, { value: "80" }] },
+      ],
+    });
+    expect(out.period.map((r) => [r.metric_key, r.dimension, r.dimension_value, r.value])).toEqual([
+      ["ga4_sessions", "source", "koin", 437],
+      ["ga4_users", "source", "koin", 436],
+      ["ga4_sessions", "source", "Direct", 90],
+      ["ga4_users", "source", "Direct", 80],
+    ]);
+  });
+});
+
 describe("GA4 visitor demographics", () => {
   it("stores shares of known visitors per month, top groups only", () => {
     const reqs = ga4Requests({ start: "2026-09-01", end: "2026-09-30" });

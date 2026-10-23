@@ -29,7 +29,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_engaged_sessions",
@@ -40,7 +40,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_engagement_rate",
@@ -51,7 +51,7 @@ const definitions: MetricDefinition[] = [
     format: "percent",
     aggregation: ratio("ga4_engaged_sessions", "ga4_sessions"),
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
     glossaryTerm: "engagement_rate",
   },
   {
@@ -63,7 +63,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_users",
@@ -73,7 +73,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: unique,
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_page_views",
@@ -94,7 +94,7 @@ const definitions: MetricDefinition[] = [
     format: "duration",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_avg_engagement_time",
@@ -105,7 +105,7 @@ const definitions: MetricDefinition[] = [
     format: "duration",
     aggregation: ratio("ga4_engagement_minutes", "ga4_sessions"),
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_revenue",
@@ -115,7 +115,7 @@ const definitions: MetricDefinition[] = [
     format: "currency",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_transactions",
@@ -125,7 +125,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_aov",
@@ -135,7 +135,7 @@ const definitions: MetricDefinition[] = [
     format: "currency",
     aggregation: ratio("ga4_revenue", "ga4_transactions"),
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
   {
     key: "ga4_purchase_rate",
@@ -145,7 +145,7 @@ const definitions: MetricDefinition[] = [
     format: "percent",
     aggregation: ratio("ga4_transactions", "ga4_sessions"),
     upIsGood: true,
-    dimensions: ["channel", "landing_page"],
+    dimensions: ["channel", "landing_page", "source"],
   },
 
   // -------------------------------------------------------------------------

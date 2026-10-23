@@ -105,6 +105,18 @@ export function ga4Requests(range: DateRange): Ga4ReportRequest[] {
           orderBys: by("sessions"),
         },
       },
+      // Exact traffic sources (google, m.facebook.com, chatgpt.com, a newsletter's utm_source...).
+      {
+        id: "month-source",
+        period,
+        body: {
+          dateRanges: dr(period),
+          dimensions: m("sessionSource"),
+          metrics: m("sessions", "engagedSessions", "keyEvents", "totalUsers", "userEngagementDuration", "purchaseRevenue", "transactions"),
+          limit: 25,
+          orderBys: by("sessions"),
+        },
+      },
       {
         id: "month-pages",
         period,
@@ -176,6 +188,7 @@ export function mapGa4Report(req: Ga4ReportRequest, res: Ga4ReportResponse): { d
     let dimensionValue = "";
     if (d.sessionDefaultChannelGroup !== undefined) [dimension, dimensionValue] = ["channel", d.sessionDefaultChannelGroup];
     if (d.landingPage !== undefined) [dimension, dimensionValue] = ["landing_page", d.landingPage];
+    if (d.sessionSource !== undefined) [dimension, dimensionValue] = ["source", d.sessionSource === "(direct)" ? "Direct" : d.sessionSource];
     if (d.pagePath !== undefined) [dimension, dimensionValue] = ["landing_page", d.pagePath];
     if (dimension && (!dimensionValue || dimensionValue === "(not set)")) continue;
     mets.forEach((name, i) => {

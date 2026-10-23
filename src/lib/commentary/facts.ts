@@ -111,6 +111,8 @@ export function buildMonthFacts(input: FactsInput): MonthFacts {
     if (source === "ga4") {
       const channels = resolver.breakdown("ga4_sessions", "channel", range).slice(0, 5);
       if (channels.length) details.push(`Sessions by channel: ${channels.map((c) => `${c.bucket} ${formatMetric("ga4_sessions", c.value)}`).join(", ")}`);
+      const sources = resolver.breakdown("ga4_sessions", "source", range).slice(0, 6);
+      if (sources.length) details.push(`Sessions by source: ${sources.map((c) => `${c.bucket} ${formatMetric("ga4_sessions", c.value)}`).join(", ")}`);
       const pages = resolver.breakdown("ga4_page_views", "landing_page", range).slice(0, 5);
       if (pages.length) details.push(`Views by page: ${pages.map((p) => `${p.bucket} ${formatMetric("ga4_page_views", p.value)}`).join(", ")}`);
     }
