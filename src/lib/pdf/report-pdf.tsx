@@ -79,6 +79,14 @@ export async function renderReportPdf(report: Report, theme: PdfThemeName, omit?
  * left out in turn until the rest renders, and the PDF says which was left out.
  * Returns the first error too, so the cause can be logged and fixed.
  */
+/** Readable names for what the fallback left out ("a,b" lists several parts). */
+export function omittedLabel(omitted: string): string {
+  return omitted
+    .split(",")
+    .map((id) => LABELS.get(id) ?? id)
+    .join(", ");
+}
+
 export async function renderReportPdfSafely(
   report: Report,
   theme: PdfThemeName,
@@ -95,12 +103,33 @@ export async function renderReportPdfSafely(
         continue; // Not this section; try the next one.
       }
       // Found the section: keep as much of it as possible by leaving out one part instead.
-      for (const part of PDF_PARTS[id] ?? []) {
+      const parts = PDF_PARTS[id] ?? [];
+      for (const part of parts) {
         try {
           return { pdf: await renderReportPdf(report, theme, new Set([part.id])), omitted: part.id, error };
         } catch {
           // Not this part.
         }
+      }
+      // More than one part fails: start with every part left out, then put each back
+      // if the PDF still renders with it, so only the parts that fail stay out.
+      const left = new Set(parts.map((p) => p.id));
+      let best: Buffer | null = null;
+      try {
+        best = await renderReportPdf(report, theme, new Set([...left]));
+      } catch {
+        // The section fails even without its parts.
+      }
+      if (best) {
+        for (const part of parts) {
+          left.delete(part.id);
+          try {
+            best = await renderReportPdf(report, theme, new Set([...left]));
+          } catch {
+            left.add(part.id);
+          }
+        }
+        return { pdf: best, omitted: [...left].join(","), error };
       }
       return { pdf, omitted: id, error };
     }
