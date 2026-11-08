@@ -130,7 +130,8 @@ export const searchConsoleParser: Parser = {
       const col = (name: string) => head.indexOf(name);
       // Search Console lists up to 1,000 rows; the top ones by clicks are what the report shows.
       for (const row of sheet.rows.slice(c.header + 1, c.header + 1 + 250)) {
-        const label = (row[0] ?? "").trim();
+        // Long questions wrap onto a second line inside the CSV; show them on one.
+        const label = (row[0] ?? "").replace(/\s+/g, " ").trim();
         if (!label) continue;
         const value = (dimension === "page" ? pagePath(label) : label).slice(0, 200);
         const clicks = num(row[col("clicks")]);

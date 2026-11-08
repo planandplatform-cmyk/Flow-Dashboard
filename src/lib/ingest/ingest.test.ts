@@ -328,6 +328,8 @@ describe("Google Search Console exports", () => {
     const r = gsc("gsc/Queries.csv", { period: { start: "2026-10-01", end: "2026-10-31" } });
     expect(r.errors).toEqual([]);
     expect(val(r, "gsc_clicks", "query", "bonita shores")).toBe(40);
+    // A question that wraps onto two lines in the file is kept as one search term.
+    expect(val(r, "gsc_impressions", "query", "are there any cabins available for vacation rental at possum kingdom lake in graford, texas?")).toBe(15);
     expect(r.warnings.join(" ")).toContain("Dates");
   });
 
