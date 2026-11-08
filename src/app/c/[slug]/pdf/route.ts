@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientBySlug, getViewer } from "@/lib/data/portal";
-import { pdfFileName, renderReportPdf } from "@/lib/pdf/report-pdf";
+import { pdfFileName, renderReportPdfSafely } from "@/lib/pdf/report-pdf";
 import { loadReport } from "@/lib/report/load";
 
 // Larger clients (several channels, a year of synced data) take longer than
@@ -41,7 +41,11 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/c/[slug]/pdf
   let name: string;
   try {
     const report = await loadReport(client, search, { publishedOnly: true });
-    pdf = await renderReportPdf(report, search.theme === "print" ? "print" : "dark");
+    const built = await renderReportPdfSafely(report, search.theme === "print" ? "print" : "dark");
+    pdf = built.pdf;
+    if (built.error) {
+      console.error(`PDF for ${slug}: left out the "${built.omitted}" section after:`, built.error.stack ?? built.error.message);
+    }
     name = pdfFileName(report).replace(".pdf", search.theme === "print" ? "-print.pdf" : ".pdf");
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));

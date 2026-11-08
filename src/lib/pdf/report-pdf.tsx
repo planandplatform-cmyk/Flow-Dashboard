@@ -35,9 +35,52 @@ function registerFonts() {
 
 export type PdfThemeName = "dark" | "print";
 
-export async function renderReportPdf(report: Report, theme: PdfThemeName): Promise<Buffer> {
+/** PDF sections, in order, for the fallback below. */
+export const PDF_SECTIONS: { id: string; label: string }[] = [
+  { id: "summary", label: "Executive Summary" },
+  { id: "terms", label: "Key Terms" },
+  { id: "social", label: "Social Overview" },
+  { id: "platforms", label: "Platform Breakdown" },
+  { id: "website", label: "Website" },
+  { id: "search", label: "Google Search" },
+  { id: "content", label: "Content" },
+  { id: "audience", label: "Audience" },
+  { id: "discovery", label: "Discovery" },
+  { id: "video", label: "Video" },
+  { id: "ads", label: "Meta Ads" },
+  { id: "google-ads", label: "Google Ads" },
+  { id: "comparison", label: "Comparison" },
+  { id: "trends", label: "Monthly Trends" },
+  { id: "conclusion", label: "Conclusion" },
+];
+
+export async function renderReportPdf(report: Report, theme: PdfThemeName, omit?: Set<string>): Promise<Buffer> {
   registerFonts();
-  return renderToBuffer(<ReportPdf report={report} t={theme === "print" ? PRINT : DARK} />);
+  return renderToBuffer(<ReportPdf report={report} t={theme === "print" ? PRINT : DARK} omit={omit} />);
+}
+
+/**
+ * The PDF, even when one section cannot be drawn: on failure, each section is
+ * left out in turn until the rest renders, and the PDF says which was left out.
+ * Returns the first error too, so the cause can be logged and fixed.
+ */
+export async function renderReportPdfSafely(
+  report: Report,
+  theme: PdfThemeName,
+): Promise<{ pdf: Buffer; omitted: string | null; error: Error | null }> {
+  try {
+    return { pdf: await renderReportPdf(report, theme), omitted: null, error: null };
+  } catch (e) {
+    const error = e instanceof Error ? e : new Error(String(e));
+    for (const { id } of PDF_SECTIONS) {
+      try {
+        return { pdf: await renderReportPdf(report, theme, new Set([id])), omitted: id, error };
+      } catch {
+        // Not this section; try the next one.
+      }
+    }
+    throw error;
+  }
 }
 
 export function pdfFileName(report: Report): string {
@@ -67,7 +110,7 @@ function styles(t: PdfTheme) {
 }
 type S = ReturnType<typeof styles>;
 
-function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
+function ReportPdf({ report, t, omit = new Set<string>() }: { report: Report; t: PdfTheme; omit?: Set<string> }) {
   const s = styles(t);
   const r = report;
   const { period, range, val, mom, socials, social, narratives, notes, commentary } = r;
@@ -103,10 +146,16 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
             {period.label === describeRange(range) ? "" : `${describeRange(range)} · `}
             {period.compareLabel ? `Compared with ${period.compareLabel}` : "No comparison"}
           </Text>
+          {omit.size > 0 && (
+            <Text style={{ marginTop: 6, fontSize: 8, color: t.negative }}>
+              Note: the {[...omit].map((id) => PDF_SECTIONS.find((x) => x.id === id)?.label ?? id).join(", ")} section could not be drawn and was left out of this PDF. It is in the online report.
+            </Text>
+          )}
           {r.partialNote && <Text style={{ marginTop: 6, fontSize: 8, color: t.fgSecondary }}>{period.month ? "Month in progress. " : "Still in progress. "}{r.partialNote}</Text>}
         </View>
 
         {/* Executive summary */}
+        {!omit.has("summary") && (
         <View style={s.section}>
           <Heading s={s} n={next()} title="Executive Summary" />
           <View wrap={false} style={{ backgroundColor: t.heroBg, borderRadius: 8, padding: 16, borderLeftWidth: 3, borderLeftColor: t.accent }}>
@@ -137,9 +186,10 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
             </View>
           )}
         </View>
+        )}
 
         {/* Key terms (social clients only) */}
-        {r.show.terms && (
+        {!omit.has("terms") && r.show.terms && (
           <View style={s.section}>
             <Heading s={s} n={next()} title="Understanding Key Social Media Terms" />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
@@ -154,7 +204,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Social overview */}
-        {socials.length > 0 && (
+        {!omit.has("social") && socials.length > 0 && (
           <View style={s.section}>
             <View wrap={false}>
               <Heading s={s} n={next()} title="Social Media Performance Overview" />
@@ -182,7 +232,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Platforms */}
-        {socials.length > 0 && (
+        {!omit.has("platforms") && socials.length > 0 && (
           <View style={s.section}>
             <Heading s={s} n={next()} title="Platform Performance Breakdown" />
             {social.platforms.map((p, i) => (
@@ -213,7 +263,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Website */}
-        {r.hasWebsite && (
+        {!omit.has("website") && r.hasWebsite && (
           <View style={s.section}>
             <View wrap={false}>
               <Heading s={s} n={next()} title="Website Performance" />
@@ -281,7 +331,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Google Search */}
-        {r.hasSearch && (
+        {!omit.has("search") && r.hasSearch && (
           <View style={s.section}>
             <View wrap={false}>
               <Heading s={s} n={next()} title="Google Search Rankings" />
@@ -354,7 +404,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Content */}
-        {r.show.content && (
+        {!omit.has("content") && r.show.content && (
           <View style={s.section}>
             <View wrap={false}>
               <Heading s={s} n={next()} title="Content and Engagement Analysis" />
@@ -392,7 +442,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Demographics */}
-        {r.show.audience && (
+        {!omit.has("audience") && r.show.audience && (
           <View style={s.section}>
             <Grid
               columns={2}
@@ -419,7 +469,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Discovery */}
-        {r.show.discovery && (
+        {!omit.has("discovery") && r.show.discovery && (
           <View style={s.section}>
             <Grid
               columns={2}
@@ -458,7 +508,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Video */}
-        {r.show.video && (
+        {!omit.has("video") && r.show.video && (
           <View style={s.section}>
             <Grid
               columns={3}
@@ -477,7 +527,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Ads */}
-        {r.hasAds && r.adsRange && (
+        {!omit.has("ads") && r.hasAds && r.adsRange && (
           <View style={s.section}>
             <View wrap={false}>
             <Heading s={s} n={next()} title="Meta Ad Performance" />
@@ -526,7 +576,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Google Ads */}
-        {r.hasGoogleAds && (
+        {!omit.has("google-ads") && r.hasGoogleAds && (
           <View style={s.section}>
             <View wrap={false}>
               <Heading s={s} n={next()} title="Google Ads Performance" />
@@ -625,7 +675,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Comparison */}
-        {(r.momKeys.length > 0 || social.compareCards.length > 0) && r.compareRange && (
+        {!omit.has("comparison") && (r.momKeys.length > 0 || social.compareCards.length > 0) && r.compareRange && (
           <View style={s.section}>
             <Grid
               columns={4}
@@ -697,7 +747,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Trends */}
-        {r.trends.length > 0 && (
+        {!omit.has("trends") && r.trends.length > 0 && (
           <View style={s.section}>
             <Grid
               columns={2}
@@ -719,7 +769,7 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
         )}
 
         {/* Conclusion */}
-        {commentary?.conclusion && (
+        {!omit.has("conclusion") && commentary?.conclusion && (
           <View style={s.section} wrap={false}>
             <Heading s={s} n={next()} title="Conclusion" />
             <View style={{ backgroundColor: t.conclusionBg, borderRadius: 8, padding: 16, borderLeftWidth: 3, borderLeftColor: t.accent }}>
