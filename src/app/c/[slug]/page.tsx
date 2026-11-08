@@ -20,7 +20,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatMetric } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, AUCTION_KEYS, CHANNEL_IDS, AUCTION_LABELS, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS } from "@/lib/report/load";
+import { ADS_TABLE, AUCTION_KEYS, CHANNEL_IDS, TOP_POSITION, AUCTION_LABELS, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, loadReport, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS } from "@/lib/report/load";
 import { describeRange, periodQuery } from "@/lib/report/period";
 
 export const metadata: Metadata = { title: "Performance Report" };
@@ -81,9 +81,12 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     websiteAudience,
     hasSearch,
     searchQueries,
+    topRanked,
+    topRankedBefore,
     searchPages,
     searchDevices,
     searchCountries,
+    searchAppearance,
     hasAds,
     hasGoogleAds,
     googleCampaigns,
@@ -425,12 +428,57 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
                 <KpiTile key={k} metricKey={k} value={val(k)} comparison={mom(k)} />
               ))}
             </div>
+            {/* Search terms in Google's top positions */}
+            <div className="mt-6 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+              <Card className="p-5">
+                <p className="text-xs font-medium uppercase tracking-wider text-fg-secondary">Search terms in the top {TOP_POSITION}</p>
+                <p className="mt-3 text-4xl font-semibold tabular-nums text-teal">{topRanked.length.toLocaleString("en-US")}</p>
+                <p className="mt-2 text-sm text-fg-secondary">Search terms where the site averages position 1 to {TOP_POSITION} on Google.</p>
+                {topRankedBefore !== null && period.compareLabel && (
+                  <p
+                    className={`mt-3 text-sm ${topRanked.length > topRankedBefore ? "text-positive" : topRanked.length < topRankedBefore ? "text-negative" : "text-fg-secondary"}`}
+                  >
+                    {topRanked.length === topRankedBefore
+                      ? `Same as ${period.compareLabel}`
+                      : `${topRanked.length > topRankedBefore ? "+" : ""}${topRanked.length - topRankedBefore} vs ${topRankedBefore} in ${period.compareLabel}`}
+                  </p>
+                )}
+              </Card>
+              <div className="lg:col-span-2">
+                <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-secondary">Top-ranked search terms (position 1 to {TOP_POSITION})</h3>
+                {topRanked.length > 0 ? (
+                  <DataTable
+                    caption={`Search terms ranking 1 to ${TOP_POSITION}`}
+                    columns={[
+                      { label: "#" },
+                      { label: "Search term" },
+                      { label: <MetricLabel metricKey="gsc_position" label="Avg. Position" />, align: "right" },
+                      { label: <MetricLabel metricKey="gsc_clicks" label="Clicks" />, align: "right" },
+                      { label: <MetricLabel metricKey="gsc_impressions" label="Impressions" />, align: "right" },
+                    ]}
+                    rows={topRanked.slice(0, 15).map((q, i) => [
+                      String(i + 1),
+                      <span key={q.name} className="text-fg">
+                        {q.name}
+                      </span>,
+                      formatMetric("gsc_position", q.position),
+                      formatMetric("gsc_clicks", q.clicks),
+                      formatMetric("gsc_impressions", q.impressions),
+                    ])}
+                  />
+                ) : (
+                  <p className="rounded-xl border border-line bg-surface p-5 text-sm text-fg-secondary">No search terms averaged a top {TOP_POSITION} position in this period.</p>
+                )}
+                {topRanked.length > 15 && <p className="mt-2 text-xs text-fg-muted">Showing the best 15 of {topRanked.length}.</p>}
+              </div>
+            </div>
             {(
               [
                 ["Top search terms", "Search term", searchQueries],
                 ["Top pages from Google", "Page", searchPages],
                 ["Clicks by device", "Device", searchDevices],
                 ["Top countries", "Country", searchCountries],
+                ["Search appearance", "Result type", searchAppearance],
               ] as const
             )
               .filter(([, , rows]) => rows.length > 0)

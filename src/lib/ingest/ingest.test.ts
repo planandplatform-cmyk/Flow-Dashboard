@@ -333,8 +333,18 @@ describe("Google Search Console exports", () => {
     expect(r.warnings.join(" ")).toContain("Dates");
   });
 
-  it("explains which files to use for ones the report does not need", () => {
-    const r = gsc("gsc/Search appearance.csv", { period: { start: "2026-10-01", end: "2026-10-31" } });
-    expect(r.errors.join(" ")).toContain("Queries, Pages, Countries and Devices");
+  it("reads Search appearance, and accepts an empty one with a note", () => {
+    const period = { start: "2026-10-01", end: "2026-10-31" };
+    const r = gsc("gsc/Search appearance.csv", { period });
+    expect(r.errors).toEqual([]);
+    expect(val(r, "gsc_clicks", "appearance", "Review snippet")).toBe(4);
+    // An empty one (common for small sites) says why there is nothing to save.
+    const empty = gsc("gsc-empty/Search appearance.csv", { period });
+    expect(empty.errors).toEqual([expect.stringContaining("no search appearance results")]);
+  });
+
+  it("explains that Filters.csv on its own has nothing to save", () => {
+    const r = gsc("gsc/Filters.csv", { period: { start: "2026-10-01", end: "2026-10-31" } });
+    expect(r.errors.join(" ")).toContain("Filters.csv only describes the export");
   });
 });

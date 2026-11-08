@@ -8,7 +8,7 @@ import { METRICS, SOCIAL_OVERVIEW_KEYS } from "@/lib/metrics/config";
 import { formatDelta, formatMetric, formatPctChange, formatValue } from "@/lib/metrics/format";
 import { GLOSSARY } from "@/lib/metrics/glossary";
 import { SOCIAL_SOURCES, SOURCE_LABELS, type DataSource } from "@/lib/metrics/types";
-import { ADS_TABLE, AUCTION_KEYS, AUCTION_LABELS, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS, type Report } from "@/lib/report/load";
+import { ADS_TABLE, AUCTION_KEYS, AUCTION_LABELS, TOP_POSITION, DEMOGRAPHICS, GOOGLE_ADS_TABLE, FORMAT_LABELS, snapshotsOf, VIDEO_KEYS, videoLabel, WEBSITE_COLUMNS, type Report } from "@/lib/report/load";
 import { PLATFORM_COLORS, type Bar, type CompetitorTable } from "@/lib/report/social";
 import { describeRange } from "@/lib/report/period";
 import type { TrendSeries } from "@/lib/report/trends";
@@ -292,12 +292,43 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
                 ))}
               </View>
             </View>
+            <View style={[s.row, { marginTop: 10 }]} wrap={false}>
+              <View style={[s.card, { flex: 1, alignSelf: "flex-start" }]}>
+                <Text style={s.label}>Search terms in the top {TOP_POSITION}</Text>
+                <Text style={{ fontSize: 22, lineHeight: 1.25, fontWeight: 600, color: t.accentText, marginTop: 6, marginBottom: 2 }}>{r.topRanked.length}</Text>
+                <Text style={[s.body, { fontSize: 7.5, marginTop: 2 }]}>Average position 1 to {TOP_POSITION} on Google.</Text>
+                {r.topRankedBefore !== null && period.compareLabel && (
+                  <Text style={{ fontSize: 7.5, marginTop: 4, color: t.fgSecondary }}>
+                    {r.topRanked.length === r.topRankedBefore
+                      ? `Same as ${period.compareLabel}`
+                      : `${r.topRanked.length > r.topRankedBefore ? "+" : ""}${r.topRanked.length - r.topRankedBefore} vs ${r.topRankedBefore} in ${period.compareLabel}`}
+                  </Text>
+                )}
+              </View>
+              <View style={{ flex: 2.2 }}>
+                <Text style={[s.label, { marginBottom: 4 }]}>Top-ranked search terms (position 1 to {TOP_POSITION})</Text>
+                <Table
+                  s={s}
+                  t={t}
+                  widths={[7, 51, 16, 11, 15]}
+                  head={["#", "Search term", "Position", "Clicks", "Impr."]}
+                  rows={r.topRanked.slice(0, 12).map((q, i) => [
+                    String(i + 1),
+                    q.name,
+                    formatMetric("gsc_position", q.position),
+                    formatMetric("gsc_clicks", q.clicks),
+                    formatMetric("gsc_impressions", q.impressions),
+                  ])}
+                />
+              </View>
+            </View>
             {(
               [
                 ["Top search terms", "Search term", r.searchQueries],
                 ["Top pages from Google", "Page", r.searchPages],
                 ["Clicks by device", "Device", r.searchDevices],
                 ["Top countries", "Country", r.searchCountries],
+                ["Search appearance", "Result type", r.searchAppearance],
               ] as const
             )
               .filter(([, , rows]) => rows.length > 0)

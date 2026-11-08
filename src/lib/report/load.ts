@@ -33,6 +33,9 @@ export const PLATFORM_TILES: Record<SocialSource, { keys: [string, string, strin
   linkedin: { keys: ["li_followers", "li_impressions", "li_page_views"], headline: ["li_impressions", "li_interactions"] },
 };
 
+/** Average Google position counted as "top" in the Google Search section. */
+export const TOP_POSITION = 3.5;
+
 /** Report section ids (and menu anchors) for each social channel. */
 export const CHANNEL_IDS: Record<SocialSource, string> = { meta_facebook: "facebook", meta_instagram: "instagram", tiktok: "tiktok", linkedin: "linkedin" };
 
@@ -311,7 +314,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     : [];
   // Google Search (Search Console): rankings for the search terms people used.
   const hasSearch = enabled.has("search_console") && val("gsc_impressions") !== null;
-  const searchTable = (dimension: "query" | "page" | "device" | "country", limit: number) =>
+  const searchTable = (dimension: "query" | "page" | "device" | "country" | "appearance", limit: number) =>
     hasSearch
       ? resolver
           .breakdown("gsc_clicks", dimension, range)
@@ -328,9 +331,29 @@ export async function loadReport(client: Client, search: Search, opts: { publish
           })
       : [];
   const searchQueries = searchTable("query", 15);
+  // Search terms ranking in Google's top 3.5 on average: how many, and which (best first).
+  const topRankedFor = (r: DateRange) =>
+    hasSearch
+      ? resolver
+          .breakdown("gsc_impressions", "query", r)
+          .map(({ bucket, value }) => {
+            const f = { dimension: "query", value: bucket };
+            return {
+              name: bucket,
+              impressions: value,
+              clicks: resolver.resolve("gsc_clicks", r, f).value,
+              position: resolver.resolve("gsc_position", r, f).value,
+            };
+          })
+          .filter((q): q is typeof q & { position: number } => q.position !== null && q.position <= TOP_POSITION)
+      : [];
+  const topRanked = topRankedFor(range).sort((a, b) => a.position - b.position || (b.clicks ?? 0) - (a.clicks ?? 0));
+  // Only compared when the earlier period has Search Console data at all.
+  const topRankedBefore = compareRange && hasSearch && val("gsc_impressions", compareRange) !== null ? topRankedFor(compareRange).length : null;
   const searchPages = searchTable("page", 10);
   const searchDevices = searchTable("device", 5);
   const searchCountries = searchTable("country", 5);
+  const searchAppearance = searchTable("appearance", 8);
   const hasAds = adsRange !== null && val("ads_spend", adsRange) !== null;
   const hasGoogleAds = enabled.has("google_ads") && (val("gads_spend") !== null || val("gads_clicks") !== null);
   const googleCampaigns = hasGoogleAds
@@ -506,9 +529,12 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     websiteAudience,
     hasSearch,
     searchQueries,
+    topRanked,
+    topRankedBefore,
     searchPages,
     searchDevices,
     searchCountries,
+    searchAppearance,
     hasAds,
     hasGoogleAds,
     googleCampaigns,

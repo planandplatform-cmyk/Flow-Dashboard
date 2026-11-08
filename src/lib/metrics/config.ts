@@ -637,7 +637,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["query", "page", "country", "device"],
+    dimensions: ["query", "page", "country", "device", "appearance"],
   },
   {
     key: "gsc_impressions",
@@ -647,7 +647,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: true,
-    dimensions: ["query", "page", "country", "device"],
+    dimensions: ["query", "page", "country", "device", "appearance"],
   },
   {
     key: "gsc_position_weighted",
@@ -657,7 +657,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: sum,
     upIsGood: false,
-    dimensions: ["query", "page", "country", "device"],
+    dimensions: ["query", "page", "country", "device", "appearance"],
     internal: true,
   },
   {
@@ -668,7 +668,7 @@ const definitions: MetricDefinition[] = [
     format: "percent",
     aggregation: ratio("gsc_clicks", "gsc_impressions"),
     upIsGood: true,
-    dimensions: ["query", "page", "country", "device"],
+    dimensions: ["query", "page", "country", "device", "appearance"],
   },
   {
     key: "gsc_position",
@@ -678,7 +678,7 @@ const definitions: MetricDefinition[] = [
     format: "number",
     aggregation: ratio("gsc_position_weighted", "gsc_impressions"),
     upIsGood: false,
-    dimensions: ["query", "page", "country", "device"],
+    dimensions: ["query", "page", "country", "device", "appearance"],
   },
 
   // -------------------------------------------------------------------------

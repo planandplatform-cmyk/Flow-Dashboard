@@ -8,8 +8,9 @@
  * - Queries ("Top queries"), Pages ("Top pages"), Countries and Devices:
  *   totals for the export's date range, by search term, page, country or
  *   device.
+ * - Search appearance: rich result types (review snippets, FAQ, videos...).
+ *   Often empty for smaller sites, which is fine.
  * - Filters: read for the date range ("Oct 1, 2026-Oct 31, 2026").
- * - Search appearance: not stored.
  *
  * Position is stored as position x impressions so it averages correctly over
  * any range; CTR is recomputed from clicks and impressions.
@@ -19,7 +20,7 @@ import { norm, num, parseDate } from "../cells";
 import type { ParseContext, Parser, Period, Sheet } from "../types";
 import { fileNamePeriod, missingPeriodMessage } from "./common";
 
-type Kind = "dates" | "queries" | "pages" | "countries" | "devices" | "unused" | "filters";
+type Kind = "dates" | "queries" | "pages" | "countries" | "devices" | "appearance" | "unused" | "filters";
 
 const FIRST: Record<string, Kind> = {
   date: "dates",
@@ -33,7 +34,7 @@ const FIRST: Record<string, Kind> = {
   countries: "countries",
   device: "devices",
   devices: "devices",
-  "search appearance": "unused",
+  "search appearance": "appearance",
   filter: "filters",
 };
 
@@ -69,7 +70,7 @@ export function filtersPeriod(sheet: Sheet, header: number): Period | null {
   return null;
 }
 
-const DIMENSION: Partial<Record<Kind, string>> = { queries: "query", pages: "page", countries: "country", devices: "device" };
+const DIMENSION: Partial<Record<Kind, string>> = { queries: "query", pages: "page", countries: "country", devices: "device", appearance: "appearance" };
 
 export const searchConsoleParser: Parser = {
   id: "search_console",
@@ -150,8 +151,14 @@ export const searchConsoleParser: Parser = {
     if (!used) {
       out.error(
         tables.some((t) => t.c.kind === "filters")
-          ? "Filters.csv only describes the export (its dates are read when you upload the whole export). Upload Chart.csv or Dates.csv, Queries, Pages, Countries and Devices, or the whole ZIP or Excel download."
-          : "This Search Console file is not one the report uses. Upload Chart.csv or Dates.csv, Queries, Pages, Countries and Devices (or the whole ZIP or Excel download from Performance > Export).",
+          ? "Filters.csv only describes the export (its dates are read when you upload the whole export). Upload Chart.csv or Dates.csv, Queries, Pages, Countries, Devices and Search appearance, or the whole ZIP or Excel download."
+          : "This Search Console file is not one the report uses. Upload Chart.csv or Dates.csv, Queries, Pages, Countries, Devices and Search appearance (or the whole ZIP or Excel download from Performance > Export).",
+      );
+      return;
+    }
+    if (out.rowsRead === 0 && tables.some((t) => t.c.kind === "appearance")) {
+      out.error(
+        "Nothing to save from this file: Search Console had no search appearance results for this period, which is normal for most smaller sites. Upload the other files from the export.",
       );
       return;
     }
