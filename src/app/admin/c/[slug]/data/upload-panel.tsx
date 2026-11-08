@@ -30,6 +30,16 @@ const TABLE_LABELS: Record<string, string> = {
   adDaily: "Daily ad delivery",
 };
 
+const ACCEPTED = /\.(csv|tsv|txt|xlsx|xls|xlsm|zip)$/i;
+const MAX_FILES = 20;
+
+interface BatchRow {
+  name: string;
+  data: FormData;
+  preview: PreviewState | null;
+  commit: CommitState | null;
+}
+
 const fmtDate = (d: string | null) =>
   d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "N/A";
 
@@ -44,9 +54,64 @@ export function UploadPanel({ slug, clientName, sources }: { slug: string; clien
   // options even if the form changes afterwards.
   const previewed = useRef<FormData | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
+  // Several files at once: each is previewed and saved on its own.
+  const [batch, setBatch] = useState<BatchRow[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
+
+  function pickFiles(list: FileList | null) {
+    const picked = [...(list ?? [])].filter((f) => ACCEPTED.test(f.name)).slice(0, MAX_FILES);
+    setFiles(picked);
+    setFileName(picked.length === 1 ? picked[0].name : picked.length > 1 ? `${picked.length} files` : null);
+    setBatch([]);
+    // Keep the input in step with dropped files so the form sends them.
+    if (fileInput.current && list && fileInput.current.files !== list) {
+      const dt = new DataTransfer();
+      picked.forEach((f) => dt.items.add(f));
+      fileInput.current.files = dt.files;
+    }
+  }
+
+  async function previewMany(form: HTMLFormElement) {
+    const shared = new FormData(form);
+    const rows: BatchRow[] = files.map((file) => {
+      const data = new FormData();
+      for (const key of ["source", "periodStart", "periodEnd"]) data.set(key, String(shared.get(key) ?? ""));
+      data.set("file", file);
+      return { name: file.name, data, preview: null, commit: null };
+    });
+    setBatch(rows);
+    setBatchBusy(true);
+    for (let i = 0; i < rows.length; i++) {
+      const preview = await previewUpload(slug, { status: "idle" }, rows[i].data);
+      rows[i] = { ...rows[i], preview };
+      setBatch([...rows]);
+    }
+    setBatchBusy(false);
+  }
+
+  async function saveMany() {
+    setBatchBusy(true);
+    const rows = [...batch];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (r.preview?.status !== "ready" || !r.preview.preview.ok || r.commit?.status === "done") continue;
+      rows[i] = { ...r, commit: await commitUpload(slug, r.data) };
+      setBatch([...rows]);
+    }
+    setBatchBusy(false);
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (files.length > 1) {
+      setDismissed(true);
+      setCommit({ status: "idle" });
+      void previewMany(e.currentTarget);
+      return;
+    }
     const data = new FormData(e.currentTarget);
     previewed.current = data;
     setDismissed(false);
@@ -65,6 +130,8 @@ export function UploadPanel({ slug, clientName, sources }: { slug: string; clien
     previewed.current = null;
     setDismissed(true);
     setFileName(null);
+    setFiles([]);
+    setBatch([]);
     setCommit({ status: "idle" });
   }
 
@@ -87,22 +154,42 @@ export function UploadPanel({ slug, clientName, sources }: { slug: string; clien
           </select>
         </Field>
 
-        <Field label="File" htmlFor="file" hint="CSV or Excel exported from the platform, up to 4 MB. For PDFs, use the Screenshots & PDFs tab.">
+        <Field
+          label="Files"
+          htmlFor="file"
+          hint="CSV, Excel or ZIP exported from the platform, up to 4 MB each. Drop several at once. For PDFs, use the Screenshots & PDFs tab."
+        >
           <label
             htmlFor="file"
-            className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-line bg-raised px-4 py-6 text-center transition hover:border-teal"
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              pickFiles(e.dataTransfer.files);
+            }}
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition hover:border-teal ${
+              dragging ? "border-teal bg-teal-950" : "border-line bg-raised"
+            }`}
           >
-            <span className="text-sm font-medium text-fg">{fileName ?? "Choose a file"}</span>
-            <span className="mt-1 text-xs text-fg-muted">.csv, .xlsx, .xls or .zip</span>
+            <span className="text-sm font-medium text-fg">{fileName ?? "Drop files here or choose"}</span>
+            <span className="mt-1 text-xs text-fg-muted">
+              {files.length > 1 ? files.map((f) => f.name).join(", ") : ".csv, .xlsx, .xls or .zip"}
+            </span>
           </label>
           <input
+            ref={fileInput}
             id="file"
             name="file"
             type="file"
+            multiple
             required
             accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm,.zip"
             className="sr-only"
-            onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+            onChange={(e) => pickFiles(e.target.files)}
           />
         </Field>
 
@@ -115,18 +202,20 @@ export function UploadPanel({ slug, clientName, sources }: { slug: string; clien
           </div>
         </fieldset>
 
-        <Button type="submit" disabled={previewing || committing} className="w-full">
-          {previewing ? "Reading file..." : "Preview"}
+        <Button type="submit" disabled={previewing || committing || batchBusy} className="w-full">
+          {previewing || (batchBusy && batch.some((r) => !r.preview)) ? "Reading files..." : files.length > 1 ? `Preview ${files.length} files` : "Preview"}
         </Button>
       </form>
 
       <div className="min-w-0 space-y-6" aria-live="polite">
-        {(state.status === "idle" || dismissed) && (
+        {batch.length > 0 && <BatchList rows={batch} busy={batchBusy} slug={slug} clientName={clientName} onSave={saveMany} onReset={reset} />}
+
+        {(state.status === "idle" || dismissed) && batch.length === 0 && (
           <div className="rounded-xl border border-dashed border-line p-8 text-sm leading-relaxed text-fg-secondary">
             <p className="font-medium text-fg">How it works</p>
             <ol className="mt-3 list-decimal space-y-1.5 pl-5">
               <li>Export the report from the platform (GA4, Meta Business Suite, Ads Manager, Shopify, TikTok or LinkedIn).</li>
-              <li>Choose the file and press Preview. Nothing is saved yet.</li>
+              <li>Drop in one file or several (or the whole ZIP) and press Preview. Nothing is saved yet.</li>
               <li>Check the totals against the platform, then save.</li>
               <li>Every upload can be rolled back from the history tab.</li>
             </ol>
@@ -341,6 +430,94 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs uppercase tracking-wider text-fg-muted">{label}</dt>
       <dd className="mt-1 text-fg">{value}</dd>
+    </div>
+  );
+}
+
+/** Several files: one line each with what was found, then one Save for every file that passed. */
+function BatchList({
+  rows,
+  busy,
+  slug,
+  clientName,
+  onSave,
+  onReset,
+}: {
+  rows: BatchRow[];
+  busy: boolean;
+  slug: string;
+  clientName: string;
+  onSave: () => void;
+  onReset: () => void;
+}) {
+  const ready = rows.filter((r) => r.preview?.status === "ready" && r.preview.preview.ok && r.commit?.status !== "done");
+  const saved = rows.filter((r) => r.commit?.status === "done");
+  const reading = rows.some((r) => !r.preview);
+  const demo = rows.some((r) => r.preview?.status === "ready" && r.preview.demo);
+  // A Search Console file without daily totals warns about it, unless another file in this batch has them.
+  const batchHasDaily = rows.some((r) => r.preview?.status === "ready" && r.preview.preview.counts.daily > 0);
+  const warningsFor = (w: string[]) => w.filter((x) => !(batchHasDaily && x.startsWith("No Chart or Dates file")));
+
+  return (
+    <div className="space-y-4">
+      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface text-sm">
+        {rows.map((r, i) => {
+          const pv = r.preview?.status === "ready" ? r.preview.preview : null;
+          const problem =
+            r.commit?.status === "error"
+              ? r.commit.message
+              : r.preview?.status === "error"
+                ? r.preview.message
+                : pv && !pv.ok
+                  ? pv.errors.join(" ")
+                  : null;
+          const status = r.commit?.status === "done" ? "Saved" : !r.preview ? "Reading..." : problem ? "Needs attention" : "Ready";
+          return (
+            <li key={`${i}-${r.name}`} className="space-y-1 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-fg">{r.name}</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    status === "Saved" ? "bg-teal-950 text-teal" : status === "Ready" ? "bg-raised text-fg" : status === "Needs attention" ? "bg-negative/10 text-negative" : "text-fg-muted"
+                  }`}
+                >
+                  {status}
+                </span>
+              </div>
+              {pv && (
+                <p className="text-xs text-fg-secondary">
+                  {pv.parserLabel} · {pv.periodStart ? `${fmtDate(pv.periodStart)} to ${fmtDate(pv.periodEnd)}` : "No dates"} · {pv.rowsRead.toLocaleString()} rows
+                  {r.commit?.status === "done" && ` · ${r.commit.inserted.toLocaleString()} new, ${r.commit.updated.toLocaleString()} updated`}
+                </p>
+              )}
+              {problem && <p className="text-xs text-negative">{problem}</p>}
+              {pv && pv.ok && warningsFor(pv.warnings).length > 0 && r.commit?.status !== "done" && (
+                <p className="text-xs text-fg-muted">{warningsFor(pv.warnings).join(" ")}</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {saved.length > 0 && !busy && (
+        <Notice tone="success" title="Saved">
+          {saved.length} of {rows.length} files are now in {clientName}&apos;s report. <Link href={`/c/${slug}`} className="underline">View report</Link> ·{" "}
+          <Link href="?tab=history" className="underline">Upload history</Link>
+        </Notice>
+      )}
+      <div className="flex flex-wrap gap-3">
+        {ready.length > 0 && (
+          <Button type="button" onClick={onSave} disabled={busy || reading || demo}>
+            {busy && !reading ? "Saving..." : `Save ${ready.length} ${ready.length === 1 ? "file" : "files"} to ${clientName}`}
+          </Button>
+        )}
+        <Button type="button" variant="secondary" onClick={onReset} disabled={busy}>
+          {saved.length ? "Upload more" : "Start over"}
+        </Button>
+      </div>
+      {demo && <p className="text-xs text-fg-muted">Demo mode: connect Supabase to save.</p>}
+      {ready.length > 0 && rows.some((r) => r.preview?.status === "error" || (r.preview?.status === "ready" && !r.preview.preview.ok)) && (
+        <p className="text-xs text-fg-muted">Files that need attention are skipped. Fix them and upload them again on their own.</p>
+      )}
     </div>
   );
 }
