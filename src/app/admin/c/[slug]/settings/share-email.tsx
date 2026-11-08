@@ -162,7 +162,6 @@ export function ShareEmail({
         {kind === "report" && pdfAttached && (
           <a
             href={`${reportBase}/pdf?month=${month}`}
-            download
             className="inline-flex items-center justify-center rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-fg-secondary transition hover:border-line-focus hover:text-fg"
           >
             Download PDF to attach

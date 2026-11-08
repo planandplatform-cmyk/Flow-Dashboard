@@ -37,11 +37,11 @@ export function PdfMenu({ href, note }: { href: string; note?: string | null }) 
       </button>
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-line bg-shell p-2 shadow-2xl">
-          <a href={href} download onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 hover:bg-raised">
+          <a href={href} onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 hover:bg-raised">
             <span className="block text-sm font-medium text-fg">Download PDF</span>
             <span className="block text-xs text-fg-muted">Dark, as it looks on screen</span>
           </a>
-          <a href={`${href}${join}theme=print`} download onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 hover:bg-raised">
+          <a href={`${href}${join}theme=print`} onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 hover:bg-raised">
             <span className="block text-sm font-medium text-fg">Print-friendly PDF</span>
             <span className="block text-xs text-fg-muted">White background, for printing</span>
           </a>
