@@ -20,6 +20,11 @@ describe("report email", () => {
     expect(body).not.toMatch(/—/);
   });
 
+  it("says the PDF is attached when it will be", () => {
+    expect(buildShareEmail({ ...base, pdfAttached: true }).body).toContain("A PDF version of your September 2026 report is attached at the bottom of this email.");
+    expect(buildShareEmail(base).body).not.toContain("PDF");
+  });
+
   it("works without a name or video", () => {
     const { body } = buildShareEmail({ ...base, firstName: " ", videoUrl: null, senderName: "" });
     expect(body.startsWith("Hi there,")).toBe(true);

@@ -36,6 +36,7 @@ export function ShareEmail({
   const [month, setMonth] = useState(defaultMonth);
   const [firstName, setFirstName] = useState("");
   const [isNew, setIsNew] = useState(false);
+  const [pdfAttached, setPdfAttached] = useState(true);
   // Last month is the latest complete report.
   const last = months[1] ?? months[0];
   const [edited, setEdited] = useState<string | null>(null);
@@ -57,8 +58,8 @@ export function ShareEmail({
             lastMonthLabel: last.label,
             lastMonthUrl: `${reportBase}?month=${last.value}`,
           })
-        : buildShareEmail({ clientName, firstName, monthLabel, reportUrl: `${reportBase}?month=${month}`, videoUrl, senderName }),
-    [kind, clientName, firstName, loginUrl, videoUrl, channels, senderName, hasWebsite, hasSocialOrAds, isNew, last, monthLabel, reportBase, month],
+        : buildShareEmail({ clientName, firstName, monthLabel, reportUrl: `${reportBase}?month=${month}`, videoUrl, senderName, pdfAttached }),
+    [kind, clientName, firstName, loginUrl, videoUrl, channels, senderName, hasWebsite, hasSocialOrAds, isNew, last, monthLabel, reportBase, month, pdfAttached],
   );
   const text = edited ?? email.body;
   // Any change to the inputs rebuilds the message, dropping manual edits.
@@ -109,6 +110,15 @@ export function ShareEmail({
         <Field label="Their first name" htmlFor="share-name" hint="Optional. Leave blank for “Hi there”.">
           <input id="share-name" value={firstName} onChange={(e) => reset(setFirstName)(e.target.value)} className={inputClass} placeholder="Dana" />
         </Field>
+        {kind === "report" && (
+          <label className="flex items-start gap-3 self-center rounded-lg border border-line bg-raised p-3">
+            <input type="checkbox" checked={pdfAttached} onChange={(e) => reset(setPdfAttached)(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal" />
+            <span>
+              <span className="block font-medium text-fg">Attaching the PDF</span>
+              <span className="block text-xs text-fg-muted">Adds a line saying the PDF is attached. Download it below, then drag it into the Gmail draft.</span>
+            </span>
+          </label>
+        )}
         {kind === "welcome" && (
           <label className="flex items-start gap-3 self-center rounded-lg border border-line bg-raised p-3">
             <input type="checkbox" checked={isNew} onChange={(e) => reset(setIsNew)(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal" />
@@ -149,13 +159,22 @@ export function ShareEmail({
         >
           Open in Gmail
         </a>
+        {kind === "report" && pdfAttached && (
+          <a
+            href={`${reportBase}/pdf?month=${month}`}
+            download
+            className="inline-flex items-center justify-center rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-fg-secondary transition hover:border-line-focus hover:text-fg"
+          >
+            Download PDF to attach
+          </a>
+        )}
         <Button type="button" variant="secondary" onClick={() => copy("body", text)}>
           {copied === "body" ? "Copied" : "Copy message"}
         </Button>
       </div>
       <p className="text-xs text-fg-muted">
         {recipients.length
-          ? `Gmail opens a draft addressed to this client's ${recipients.length === 1 ? "login" : `${recipients.length} logins`}, sent from the Gmail account you're signed in to.`
+          ? `Gmail opens a draft addressed to this client's ${recipients.length === 1 ? "login" : `${recipients.length} logins`}, sent from the Gmail account you're signed in to.${kind === "report" && pdfAttached ? " Gmail links cannot attach files, so drag the downloaded PDF into the draft before sending." : ""}`
           : "Invite someone under Logins first so they can sign in."}
       </p>
     </div>

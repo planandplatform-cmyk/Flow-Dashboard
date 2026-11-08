@@ -13,6 +13,8 @@ export interface ShareEmailInput {
   reportUrl: string;
   videoUrl: string | null;
   senderName: string;
+  /** Say that a PDF copy of the report is attached to the email. */
+  pdfAttached?: boolean;
 }
 
 export function buildShareEmail(i: ShareEmailInput): { subject: string; body: string } {
@@ -25,6 +27,7 @@ export function buildShareEmail(i: ShareEmailInput): { subject: string; body: st
     "",
     "Sign in with your email address and we'll send you a secure sign-in link. No password needed.",
   ];
+  if (i.pdfAttached) lines.push("", `A PDF version of your ${i.monthLabel} report is attached at the bottom of this email.`);
   if (i.videoUrl) lines.push("", `New to the portal? This short walkthrough shows you around: ${i.videoUrl}`);
   const signature = i.senderName.trim() ? [i.senderName.trim(), "Flow Forward Media"] : ["The Flow Forward Media team"];
   lines.push("", "Let us know if you have any questions.", "", ...signature);
