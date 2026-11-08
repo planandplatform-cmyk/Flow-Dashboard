@@ -54,6 +54,21 @@ export const PDF_SECTIONS: { id: string; label: string }[] = [
   { id: "conclusion", label: "Conclusion" },
 ];
 
+/** Parts of a section, tried before leaving the whole section out (labels name them in the PDF note). */
+const PDF_PARTS: Record<string, { id: string; label: string }[]> = {
+  website: [
+    { id: "website-commentary", label: "Website commentary" },
+    { id: "website-tiles", label: "Website headline numbers" },
+    { id: "website-sales", label: "Website online sales" },
+    { id: "website-channels", label: "Website sessions by channel" },
+    { id: "website-pages", label: "Website views by page" },
+    { id: "website-sources", label: "Website sessions by source" },
+    { id: "website-cities", label: "Website top cities" },
+    { id: "website-audience", label: "Website visitors (who visited)" },
+  ],
+};
+const LABELS = new Map([...PDF_SECTIONS, ...Object.values(PDF_PARTS).flat()].map((x) => [x.id, x.label]));
+
 export async function renderReportPdf(report: Report, theme: PdfThemeName, omit?: Set<string>): Promise<Buffer> {
   registerFonts();
   return renderToBuffer(<ReportPdf report={report} t={theme === "print" ? PRINT : DARK} omit={omit} />);
@@ -73,11 +88,21 @@ export async function renderReportPdfSafely(
   } catch (e) {
     const error = e instanceof Error ? e : new Error(String(e));
     for (const { id } of PDF_SECTIONS) {
+      let pdf: Buffer;
       try {
-        return { pdf: await renderReportPdf(report, theme, new Set([id])), omitted: id, error };
+        pdf = await renderReportPdf(report, theme, new Set([id]));
       } catch {
-        // Not this section; try the next one.
+        continue; // Not this section; try the next one.
       }
+      // Found the section: keep as much of it as possible by leaving out one part instead.
+      for (const part of PDF_PARTS[id] ?? []) {
+        try {
+          return { pdf: await renderReportPdf(report, theme, new Set([part.id])), omitted: part.id, error };
+        } catch {
+          // Not this part.
+        }
+      }
+      return { pdf, omitted: id, error };
     }
     throw error;
   }
@@ -148,7 +173,7 @@ function ReportPdf({ report, t, omit = new Set<string>() }: { report: Report; t:
           </Text>
           {omit.size > 0 && (
             <Text style={{ marginTop: 6, fontSize: 8, color: t.negative }}>
-              Note: the {[...omit].map((id) => PDF_SECTIONS.find((x) => x.id === id)?.label ?? id).join(", ")} section could not be drawn and was left out of this PDF. It is in the online report.
+              Note: the {[...omit].map((id) => LABELS.get(id) ?? id).join(", ")} section could not be drawn and was left out of this PDF. It is in the online report.
             </Text>
           )}
           {r.partialNote && <Text style={{ marginTop: 6, fontSize: 8, color: t.fgSecondary }}>{period.month ? "Month in progress. " : "Still in progress. "}{r.partialNote}</Text>}
@@ -267,13 +292,15 @@ function ReportPdf({ report, t, omit = new Set<string>() }: { report: Report; t:
           <View style={s.section}>
             <View wrap={false}>
               <Heading s={s} n={next()} title="Website Performance" />
-              {narratives.ga4?.body && <Text style={[s.body, { marginBottom: 8 }]}>{narratives.ga4.body}</Text>}
+              {!omit.has("website-commentary") && narratives.ga4?.body && <Text style={[s.body, { marginBottom: 8 }]}>{narratives.ga4.body}</Text>}
+              {!omit.has("website-tiles") && (
               <View style={s.row}>
                 {r.websiteTiles.map((k) => (
                   <Kpi key={k} s={s} t={t} metricKey={k} value={val(k)} comparison={mom(k)} />
                 ))}
               </View>
-              {r.salesTiles.length > 0 && (
+              )}
+              {!omit.has("website-sales") && r.salesTiles.length > 0 && (
                 <View style={{ marginTop: 8 }}>
                   <Text style={[s.label, { marginBottom: 4 }]}>Online sales</Text>
                   <View style={s.row}>
@@ -286,13 +313,13 @@ function ReportPdf({ report, t, omit = new Set<string>() }: { report: Report; t:
             </View>
             {(
               [
-                ["Sessions by channel", "Channel", r.websiteChannels],
-                ["Views by page", "Page", r.websitePages],
-                ["Sessions by source", "Source", r.websiteSources],
-                ["Top cities by engaged sessions", "City", r.websiteCities],
+                ["Sessions by channel", "Channel", r.websiteChannels, "website-channels"],
+                ["Views by page", "Page", r.websitePages, "website-pages"],
+                ["Sessions by source", "Source", r.websiteSources, "website-sources"],
+                ["Top cities by engaged sessions", "City", r.websiteCities, "website-cities"],
               ] as const
             )
-              .filter(([, , table]) => table.rows.length > 0)
+              .filter(([, , table, part]) => table.rows.length > 0 && !omit.has(part))
               .map(([title, first, table]) => {
                 const rest = table.keys.length;
                 const firstWidth = first === "Page" ? 100 - rest * 13 : 100 - rest * 14;
@@ -309,7 +336,7 @@ function ReportPdf({ report, t, omit = new Set<string>() }: { report: Report; t:
                   </View>
                 );
               })}
-            {r.websiteAudience.length > 0 && (
+            {!omit.has("website-audience") && r.websiteAudience.length > 0 && (
               <View style={{ marginTop: 10 }}>
                 <Text style={[s.label, { marginBottom: 4 }]}>Who visited</Text>
                 {[r.websiteAudience.slice(0, 3), r.websiteAudience.slice(3)]
