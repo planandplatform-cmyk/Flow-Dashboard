@@ -7,6 +7,20 @@ import { METRICS } from "@/lib/metrics/config";
 import type { DateRange, ISODate, MetricResolver } from "@/lib/metrics/aggregate";
 import type { DataSource } from "@/lib/metrics/types";
 
+/**
+ * A chartable number, or null. Values that are not numbers or are absurdly
+ * large (a mis-read upload, a ratio over a near-zero base) are left out of
+ * charts and logged, rather than breaking them.
+ */
+export function chartValue(v: number | null, key: string, month: string): number | null {
+  if (v === null) return null;
+  if (!Number.isFinite(v) || Math.abs(v) > 1e12) {
+    console.warn(`Chart value left out: ${key} for ${month} is ${v}. Check the uploads for this month.`);
+    return null;
+  }
+  return v;
+}
+
 /** Every stored metric a set of metrics is computed from, including themselves. */
 export function metricDependencies(keys: string[]): string[] {
   const out = new Set<string>();
@@ -106,8 +120,8 @@ export function buildTrends(
           month,
           label: formatMonthShort(month),
           fullLabel: formatMonth(month),
-          value: current.value,
-          previous: prior.value,
+          value: chartValue(current.value, key, month),
+          previous: chartValue(prior.value, key, addMonths(month, -12)),
           partial: r.end >= today,
           estimated: current.estimated,
         };
@@ -152,7 +166,7 @@ export function buildSocialGrowth(
       const row: GrowthMetric["points"][number] = { month, label: formatMonthShort(month), fullLabel: formatMonth(month), partial: r.end >= today, total: null };
       let total: number | null = null;
       for (const line of lines) {
-        const v = resolver.resolve(line.key, r).value;
+        const v = chartValue(resolver.resolve(line.key, r).value, line.key, month);
         row[line.source] = v;
         if (v !== null && line.inTotal) total = (total ?? 0) + v;
       }

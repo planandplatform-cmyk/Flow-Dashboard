@@ -806,7 +806,7 @@ function Bars({ t, bars }: { t: PdfTheme; bars: Bar[] }) {
         <View key={b.label} style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 5 }}>
           <Text style={{ width: "30%", fontSize: 8, color: t.fgSecondary }}>{b.label}</Text>
           <View style={{ flex: 1, height: 7, backgroundColor: t.raised, borderRadius: 4 }}>
-            <View style={{ height: 7, width: `${Math.max(1, (b.value / max) * 100)}%`, backgroundColor: b.color, borderRadius: 4 }} />
+            <View style={{ height: 7, width: `${Math.max(1, Math.min(100, Number.isFinite(b.value / max) ? (b.value / max) * 100 : 1))}%`, backgroundColor: b.color, borderRadius: 4 }} />
           </View>
           <Text style={{ width: 44, textAlign: "right", fontSize: 8, fontWeight: 600, color: t.fg }}>{b.display}</Text>
         </View>
@@ -1003,10 +1003,11 @@ function TrendChart({ s, t, series, eventMonths, width = 240 }: { s: S; t: PdfTh
   const W = width;
   const H = 70;
   const pts = series.points;
-  const all = pts.flatMap((p) => [p.value, p.previous]).filter((v): v is number => v !== null);
+  const all = pts.flatMap((p) => [p.value, p.previous]).filter((v): v is number => v !== null && Number.isFinite(v));
   const max = Math.max(...all, 0) * 1.1 || 1;
   const x = (i: number) => (pts.length === 1 ? W / 2 : (i / (pts.length - 1)) * (W - 8) + 4);
-  const y = (v: number) => H - 4 - (v / max) * (H - 10);
+  // Kept inside the chart whatever the data (negative values sit on the baseline).
+  const y = (v: number) => Math.min(H - 4, Math.max(2, H - 4 - (v / max) * (H - 10)));
   const line = (key: "value" | "previous") =>
     pts
       .map((p, i) => (p[key] === null ? null : `${x(i).toFixed(1)},${y(p[key]!).toFixed(1)}`))
