@@ -7,10 +7,26 @@ export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // Vercel caps request bodies a
 export function readTable(data: ArrayBuffer | Uint8Array, fileName: string): Sheet[] {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const lower = fileName.toLowerCase();
+  // A ZIP of CSV files (Search Console's "Download CSV"), not an Excel workbook.
+  if (lower.endsWith(".zip")) return readZipOfCsv(bytes);
   if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".xlsm") || looksLikeZipOrOle(bytes)) {
     return readWorkbook(bytes);
   }
   return [{ name: fileName, rows: parseCsv(decodeText(bytes)) }];
+}
+
+/** Each CSV inside a ZIP becomes a sheet named after its file. */
+function readZipOfCsv(bytes: Uint8Array): Sheet[] {
+  const zip = XLSX.CFB.read(bytes, { type: "array" });
+  const sheets: Sheet[] = [];
+  zip.FullPaths.forEach((path: string, i: number) => {
+    const entry = zip.FileIndex[i];
+    if (!/\.(csv|tsv|txt)$/i.test(path) || !entry?.content) return;
+    const name = path.split("/").pop() ?? path;
+    sheets.push({ name, rows: parseCsv(decodeText(new Uint8Array(entry.content as ArrayLike<number>))) });
+  });
+  if (!sheets.length) throw new Error("The ZIP file has no CSV files in it.");
+  return sheets;
 }
 
 function looksLikeZipOrOle(b: Uint8Array): boolean {

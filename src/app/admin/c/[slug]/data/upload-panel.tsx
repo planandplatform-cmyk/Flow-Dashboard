@@ -93,14 +93,14 @@ export function UploadPanel({ slug, clientName, sources }: { slug: string; clien
             className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-line bg-raised px-4 py-6 text-center transition hover:border-teal"
           >
             <span className="text-sm font-medium text-fg">{fileName ?? "Choose a file"}</span>
-            <span className="mt-1 text-xs text-fg-muted">.csv, .xlsx or .xls</span>
+            <span className="mt-1 text-xs text-fg-muted">.csv, .xlsx, .xls or .zip</span>
           </label>
           <input
             id="file"
             name="file"
             type="file"
             required
-            accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm"
+            accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm,.zip"
             className="sr-only"
             onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
           />

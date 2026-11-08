@@ -8,6 +8,7 @@ import { BatchBuilder } from "./batch";
 import { ga4Parser } from "./parsers/ga4";
 import { googleAdsParser } from "./parsers/google-ads";
 import { googleAdsInsightsParser } from "./parsers/google-ads-insights";
+import { searchConsoleParser } from "./parsers/search-console";
 import { linkedinParser } from "./parsers/linkedin";
 import { metaAdsParser } from "./parsers/meta-ads";
 import { metaContentParser, metaInsightsParser } from "./parsers/meta-organic";
@@ -23,12 +24,13 @@ export const PARSERS: Parser[] = [
   metaAdsParser,
   googleAdsParser,
   googleAdsInsightsParser,
+  searchConsoleParser,
   shopifyParser,
   tiktokParser,
   linkedinParser,
 ];
 
-const ACCEPTED = /\.(csv|tsv|txt|xlsx|xls|xlsm)$/i;
+const ACCEPTED = /\.(csv|tsv|txt|xlsx|xls|xlsm|zip)$/i;
 
 function failure(message: string, parser = { id: "none", label: "Not recognized" }): ParseResult {
   const b = new BatchBuilder();
@@ -41,7 +43,7 @@ export function parseUpload(data: ArrayBuffer | Uint8Array, ctx: ParseContext): 
   if (size === 0) return failure("The file is empty.");
   if (size > MAX_UPLOAD_BYTES) return failure("The file is larger than 4 MB. Export a shorter date range and try again.");
   if (/\.pdf$/i.test(ctx.fileName)) return failure("PDFs are read on the Screenshots & PDFs tab, where AI reads the numbers and you check them.");
-  if (!ACCEPTED.test(ctx.fileName)) return failure("Upload a CSV or Excel file (.csv, .xlsx, .xls).");
+  if (!ACCEPTED.test(ctx.fileName)) return failure("Upload a CSV, Excel or ZIP file (.csv, .xlsx, .xls, .zip).");
 
   let sheets;
   try {

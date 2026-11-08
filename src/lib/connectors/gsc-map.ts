@@ -41,7 +41,7 @@ export function gscRequests(range: DateRange): GscRequest[] {
 }
 
 /** Full page address to its path, the way the website section shows pages. */
-function pagePath(url: string): string {
+export function pagePath(url: string): string {
   try {
     const u = new URL(url);
     return u.pathname + u.search;

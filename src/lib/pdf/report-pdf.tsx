@@ -296,6 +296,8 @@ function ReportPdf({ report, t }: { report: Report; t: PdfTheme }) {
               [
                 ["Top search terms", "Search term", r.searchQueries],
                 ["Top pages from Google", "Page", r.searchPages],
+                ["Clicks by device", "Device", r.searchDevices],
+                ["Top countries", "Country", r.searchCountries],
               ] as const
             )
               .filter(([, , rows]) => rows.length > 0)

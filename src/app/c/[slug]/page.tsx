@@ -82,6 +82,8 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
     hasSearch,
     searchQueries,
     searchPages,
+    searchDevices,
+    searchCountries,
     hasAds,
     hasGoogleAds,
     googleCampaigns,
@@ -427,6 +429,8 @@ async function ClientReport(props: PageProps<"/c/[slug]">) {
               [
                 ["Top search terms", "Search term", searchQueries],
                 ["Top pages from Google", "Page", searchPages],
+                ["Clicks by device", "Device", searchDevices],
+                ["Top countries", "Country", searchCountries],
               ] as const
             )
               .filter(([, , rows]) => rows.length > 0)

@@ -255,7 +255,7 @@ describe("guard rails", () => {
   it("rejects unknown files and wrong extensions", () => {
     expect(parseUpload(new TextEncoder().encode("a,b\n1,2\n"), ctx("x.csv")).errors[0]).toMatch(/could not recognize/);
     expect(parseUpload(new TextEncoder().encode("hello"), ctx("x.pdf")).errors[0]).toMatch(/Screenshots & PDFs tab/);
-    expect(parseUpload(new TextEncoder().encode("hello"), ctx("x.docx")).errors[0]).toMatch(/CSV or Excel/);
+    expect(parseUpload(new TextEncoder().encode("hello"), ctx("x.docx")).errors[0]).toMatch(/CSV, Excel or ZIP/);
   });
 
   it("reads the right parser even when the wrong platform was picked", () => {
@@ -293,5 +293,46 @@ describe("Google Ads auction insights, demographics and searches", () => {
     expect(r.errors).toEqual([]);
     const spend = r.batch.period.find((p) => p.metric_key === "gads_spend" && p.dimension_value === "faa academy housing");
     expect(spend).toMatchObject({ value: 48.89, dimension: "search_term", period_start: "2026-09-01" });
+  });
+});
+
+describe("Google Search Console exports", () => {
+  const gsc = (name: string, extra: Partial<ParseContext> = {}) =>
+    parseUpload(fixture(name), ctx(name.split("/").pop()!, { source: "search_console", ...extra }));
+  const val = (r: ReturnType<typeof parse>, key: string, dim = "", value = "") =>
+    r.batch.period.find((p) => p.metric_key === key && p.dimension === dim && p.dimension_value === value)?.value;
+
+  for (const file of ["search-console-export.zip", "search-console-export.xlsx"]) {
+    it(`reads the whole export (${file.split(".").pop()})`, () => {
+      const r = gsc(file);
+      expect(r.errors).toEqual([]);
+      // Daily totals from Dates; their range dates the query and page tables.
+      expect(r.batch.daily.filter((d) => d.metric_key === "gsc_clicks").map((d) => [d.date, d.value]).sort()).toEqual([
+        ["2026-10-01", 3],
+        ["2026-10-02", 5],
+      ]);
+      expect(val(r, "gsc_clicks", "query", "bonita shores")).toBe(40);
+      expect(val(r, "gsc_position_weighted", "query", "possum kingdom lake cabins")).toBe(6660);
+      expect(val(r, "gsc_impressions", "page", "/cabins?ref=x")).toBe(400);
+      expect(r.batch.period[0]).toMatchObject({ period_start: "2026-10-01", period_end: "2026-10-02" });
+    });
+  }
+
+  it("dates the tables from Filters when there is no Chart or Dates file", () => {
+    const r = gsc("search-console-pages-filters.zip");
+    expect(r.errors).toEqual([]);
+    expect(r.batch.period[0]).toMatchObject({ period_start: "2026-10-01", period_end: "2026-10-31", dimension: "page" });
+  });
+
+  it("reads a single Queries file using the period entered", () => {
+    const r = gsc("gsc/Queries.csv", { period: { start: "2026-10-01", end: "2026-10-31" } });
+    expect(r.errors).toEqual([]);
+    expect(val(r, "gsc_clicks", "query", "bonita shores")).toBe(40);
+    expect(r.warnings.join(" ")).toContain("Dates");
+  });
+
+  it("explains which files to use for ones the report does not need", () => {
+    const r = gsc("gsc/Search appearance.csv", { period: { start: "2026-10-01", end: "2026-10-31" } });
+    expect(r.errors.join(" ")).toContain("Queries, Pages, Countries and Devices");
   });
 });

@@ -311,7 +311,7 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     : [];
   // Google Search (Search Console): rankings for the search terms people used.
   const hasSearch = enabled.has("search_console") && val("gsc_impressions") !== null;
-  const searchTable = (dimension: "query" | "page", limit: number) =>
+  const searchTable = (dimension: "query" | "page" | "device" | "country", limit: number) =>
     hasSearch
       ? resolver
           .breakdown("gsc_clicks", dimension, range)
@@ -329,6 +329,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
       : [];
   const searchQueries = searchTable("query", 15);
   const searchPages = searchTable("page", 10);
+  const searchDevices = searchTable("device", 5);
+  const searchCountries = searchTable("country", 5);
   const hasAds = adsRange !== null && val("ads_spend", adsRange) !== null;
   const hasGoogleAds = enabled.has("google_ads") && (val("gads_spend") !== null || val("gads_clicks") !== null);
   const googleCampaigns = hasGoogleAds
@@ -505,6 +507,8 @@ export async function loadReport(client: Client, search: Search, opts: { publish
     hasSearch,
     searchQueries,
     searchPages,
+    searchDevices,
+    searchCountries,
     hasAds,
     hasGoogleAds,
     googleCampaigns,
